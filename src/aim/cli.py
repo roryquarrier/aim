@@ -110,8 +110,9 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
 
         raw = reader.read("state.json").decode("utf-8", "replace")
         for ph, val in vault.items():
-            esc_val = json_escape(val)
-            raw = raw.replace(json_escape(ph), esc_val)  # escaped form (inside strings)
+            # vault values are already in JSON-escaped form (they came from the
+            # serialized state text) — substitute the escaped placeholder 1:1
+            raw = raw.replace(json_escape(ph), val)
         raw_state = raw
         click.echo("secrets restored: placeholders filled from vault")
     state = reader.state(text_override=raw_state)

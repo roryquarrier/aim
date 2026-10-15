@@ -30,8 +30,9 @@ ASSIGN_RE = re.compile(
     rb"""(?i)(?<![$:{])(token|api[_-]?key|secret|password|bearer)[\"'`\s:=]+([A-Za-z0-9_\-/+=!@#$%^&*.,;:]{16,})"""
 )
 PASSWORD_RE = re.compile(
-    rb"""(?i)(?<![$:{])(password|passwd|secret)[\"'`\s:=]+["']?([!-~]{8,64})["']?(?=\s|$|["'})\],])"""
+    rb"""(?i)(?<![$:{])(password|passwd)[\\"'`\s:=]+\\?["']?([^\s"'\\{}[\](),;]{8,64})(?=\s|$|["'})\],])"""
 )
+# value must contain a digit or symbol to count as a credential (kills prose words)
 
 
 class RedactionResult:
@@ -97,12 +98,16 @@ def scan_bytes(data: bytes, path_hint: str = "") -> tuple[bytes, RedactionResult
 
     data = ASSIGN_RE.sub(sub_assign, data)
 
-    # Pass 3: short passwords (min 8) after key names — runs last, skips placeholders
+    # Pass 3: short passwords (min 8) after key names — runs last, skips placeholders.
+    # Requires at least one digit/symbol in the value so prose never matches.
     def sub_pw(match: re.Match) -> bytes:
         whole = match.group(0)
         if b"${secret:" in whole:
             return whole
-        return namer.ph_for("PASSWORD", match.group(2))
+        value = match.group(2)
+        if not re.search(rb"[0-9!@#$%^&*+=._,\-/~?<>|:;]", value):
+            return whole  # plain word — not a credential
+        return namer.ph_for("PASSWORD", value)
 
     data = PASSWORD_RE.sub(sub_pw, data)
     return data, result

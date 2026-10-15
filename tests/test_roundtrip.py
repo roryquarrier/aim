@@ -287,6 +287,41 @@ class TestSecretsVault:
         assert "AAFfKxhV0lz6mR8jPw3nQ4eS5tUvWxYz2Ab" in restored
 
 
+    def test_pem_roundtrip(self, tmp_path):
+        """Regression: PEM private keys must restore with REAL newlines (no double-escape)."""
+        from click.testing import CliRunner
+        from aim import cli
+
+        home = make_hermes_home(tmp_path)
+        pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAtest\n-----END RSA PRIVATE KEY-----\n"
+        (home / "memories" / "MEMORY.md").write_text(f"backup key:\n{pem}\nend")
+        pkg = tmp_path / "pem.aim"
+        r = CliRunner().invoke(cli.main, [
+            "export", "--harness", "hermes", "--home", str(home),
+            "-o", str(pkg), "--with-secrets", "--passphrase", "pw",
+        ])
+        assert r.exit_code == 0, r.output
+        tgt = tmp_path / "oc2"
+        tgt.mkdir()
+        r2 = CliRunner().invoke(cli.main, [
+            "import", str(pkg), "--harness", "openclaw", "--home", str(tgt),
+            "--force", "--passphrase", "pw",
+        ])
+        assert r2.exit_code == 0, r2.output
+        restored = (tgt / "workspace" / "memory" / "MEMORY.md").read_text()
+        assert "-----BEGIN RSA PRIVATE KEY-----" in restored
+        assert "\nMIIEowIBAAKCAQEAtest\n" in restored  # real newlines, not \\n
+        assert restored == f"backup key:\n{pem}\nend"
+
+    def test_prose_passwords_not_flagged(self):
+        """Regression: 'password regularly. classified' prose must NOT trip the gate."""
+        from aim.redact import scan_bytes
+        _, r = scan_bytes(b"The password is regularly. classified as secret.")
+        assert r.count == 0
+        _, r2 = scan_bytes(b'"password": "s3cr3t!x"')
+        assert r2.count >= 1
+
+
 class TestAdjust:
     def test_path_remap(self):
         from aim.osadjust.adjust import remap_text

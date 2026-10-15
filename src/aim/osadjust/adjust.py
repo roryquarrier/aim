@@ -89,7 +89,9 @@ def snapshot_home(home: Path) -> Path | None:
     shutil.copytree(home.resolve() if home.is_symlink() else home, bak, symlinks=True, ignore_dangling_symlinks=True)
     for root, dirs, files in os.walk(bak):
         for d in dirs:
-            os.chmod(Path(root) / d, 0o700)
+            p = Path(root) / d
+            if not os.path.islink(p):
+                os.chmod(p, 0o700)
         for f in files:
             os.chmod(Path(root) / f, 0o600)
     os.chmod(bak, 0o700)
