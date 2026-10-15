@@ -93,7 +93,9 @@ def snapshot_home(home: Path) -> Path | None:
             if not os.path.islink(p):
                 os.chmod(p, 0o700)
         for f in files:
-            os.chmod(Path(root) / f, 0o600)
+            fp = Path(root) / f
+            if not os.path.islink(fp):
+                os.chmod(fp, 0o600)
     os.chmod(bak, 0o700)
     return bak
 

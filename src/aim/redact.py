@@ -107,7 +107,7 @@ def scan_bytes(data: bytes, path_hint: str = "") -> tuple[bytes, RedactionResult
         value = match.group(2)
         if not re.search(rb"[0-9!@#$%^&*+=._,\-/~?<>|:;]", value):
             return whole  # plain word — not a credential
-        return namer.ph_for("PASSWORD", value)
+        return whole.replace(value, namer.ph_for("PASSWORD", value))
 
     data = PASSWORD_RE.sub(sub_pw, data)
     return data, result

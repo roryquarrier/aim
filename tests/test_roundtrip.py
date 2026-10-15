@@ -318,8 +318,9 @@ class TestSecretsVault:
         from aim.redact import scan_bytes
         _, r = scan_bytes(b"The password is regularly. classified as secret.")
         assert r.count == 0
-        _, r2 = scan_bytes(b'"password": "s3cr3t!x"')
+        clean2, r2 = scan_bytes(b'"password": "s3cr3t!x"')
         assert r2.count >= 1
+        assert b'"password"' in clean2  # key name preserved, JSON intact
 
 
 class TestAdjust:
