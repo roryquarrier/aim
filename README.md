@@ -1,5 +1,7 @@
 # AIM — Agent Identity Migration
 
+![What AIM does](docs/infographic.png)
+
 **"Samsung Smart Switch" for AI agents:** migrate a stateful agent's persona,
 memories, skills, cron jobs, config, and MCP bindings between *harnesses*
 (Hermes ↔ OpenClaw ↔ Claude Code) and *operating systems* (Linux, WSL2, macOS).
