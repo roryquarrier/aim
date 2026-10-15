@@ -43,15 +43,22 @@ def all_adapters() -> list[str]:
 def autodetect(home: Path | None = None) -> Adapter | None:
     import os
 
-    candidates = []
-    if home:
-        candidates.append(home)
     base = Path(os.path.expanduser("~"))
     for cls in _REGISTRY.values():
-        h = home or os.environ.get(cls.home_env) or default_homes(cls)
-        for cand in ([h] if not isinstance(h, list) else h):
-            p = Path(cand) if cand else None
-            if p and p != base and cls.detect(p):
+        cands: list[Path] = []
+        if home:
+            cands.append(home)
+        else:
+            env = os.environ.get(cls.home_env) if cls.home_env else None
+            if env:
+                cands.append(Path(env))
+            else:
+                try:
+                    cands.extend(Path(p) for p in default_homes(cls))
+                except Exception:
+                    continue
+        for p in cands:
+            if p and p != base and cls().detect(p):
                 return cls()
     return None
 

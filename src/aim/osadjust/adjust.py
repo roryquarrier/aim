@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import platform
 import shutil
 import subprocess
@@ -40,16 +41,21 @@ def path_map(args: list[str]) -> dict[str, str]:
     for a in args or []:
         if "=" in a:
             src, dst = a.split("=", 1)
-            m[src] = dst
+            if src:  # empty src is invalid — would insert dst between every char
+                m[src] = dst
     return m
 
 
 def remap_text(text: str, mapping: dict[str, str]) -> tuple[str, int]:
     n = 0
     for src, dst in sorted(mapping.items(), key=lambda kv: -len(kv[0])):
-        if src in text:
-            n += text.count(src)
-            text = text.replace(src, dst)
+        if not src or src == dst or src not in text:
+            continue
+        # boundary-aware: src must be followed by a delimiter/end so /home/hal
+        # never rewrites /home/halberd
+        new_text = re.sub(re.escape(src) + r"(?![\w.-])", dst.replace("\\", "\\\\"), text)
+        n += len(re.findall(re.escape(src) + r"(?![\w.-])", text))
+        text = new_text
     return text, n
 
 
@@ -97,19 +103,28 @@ def transactional_import(home: Path, stage_fn, dry_run: bool = False) -> Path | 
         return None
     home.parent.mkdir(parents=True, exist_ok=True)
     staging = home.parent / f".{home.name}.aimstage.{os.getpid()}"
-    if staging.exists():
-        shutil.rmtree(staging)
-    if home.exists():
-        shutil.copytree(home, staging)
-    else:
-        staging.mkdir()
-    stage_fn(staging)
-    bak = snapshot_home(home)
-    if home.exists():
-        tmp_old = home.parent / f".{home.name}.aimold.{os.getpid()}"
-        home.rename(tmp_old)
-        staging.rename(home)
-        shutil.rmtree(tmp_old)
-    else:
-        staging.rename(home)
-    return bak
+    tmp_old = home.parent / f".{home.name}.aimold.{os.getpid()}"
+    try:
+        if staging.exists():
+            shutil.rmtree(staging)
+        if home.exists():
+            # ignore dangling symlinks/sockets; resolve real dir if home is itself a link
+            real_home = home.resolve() if home.is_symlink() else home
+            shutil.copytree(real_home, staging, symlinks=True, ignore_dangling_symlinks=True)
+        else:
+            staging.mkdir()
+        stage_fn(staging)
+        bak = snapshot_home(home)
+        if home.exists():
+            home.rename(tmp_old)
+            staging.rename(home)
+            shutil.rmtree(tmp_old, ignore_errors=True)
+        else:
+            staging.rename(home)
+        return bak
+    except BaseException:
+        # rollback: put the old home back, drop the half-staged copy
+        shutil.rmtree(staging, ignore_errors=True)
+        if tmp_old.exists() and not home.exists():
+            tmp_old.rename(home)
+        raise

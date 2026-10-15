@@ -1,12 +1,8 @@
-"""age v1 encryption (passphrase-based, scrypt) — interoperable with the `age` CLI.
+"""age-style passphrase encryption (scrypt + ChaCha20-Poly1305).
 
-Implements the age spec (C2SP age-encryption.org/v1) using the `cryptography`
-package only, since pyrage isn't installable on this box. File format:
-  age-encryption.org/v1
-  -> scrypt <base64(salt)> <log2(N)>
-  <base64(wrapped file key)>
-  --- <base64(HMAC)>
-  <streamed ChaCha20-Poly1305 payload chunks>
+NOTE: this is an AIM-internal format inspired by the age v1 spec — it is NOT
+byte-compatible with the `age` CLI (padded base64, 32-byte file key, text
+chunks). Interoperability with the age tool is a v1.2 goal.
 """
 from __future__ import annotations
 
@@ -33,10 +29,6 @@ def _unb64(data: bytes) -> bytes:
     return base64.standard_b64decode(data)
 
 
-def _hkdf(salt: bytes, label: bytes, ikm: bytes, length: int) -> bytes:
-    return hashlib.scrypt(ikm, salt=salt + label, n=1 << 1, r=1, p=1, maxmem=2**30, dklen=length) if False else _hkdf_sha256(salt, label, ikm, length)
-
-
 def _hkdf_sha256(salt: bytes, label: bytes, ikm: bytes, length: int) -> bytes:
     """HKDF-SHA-256 per RFC 5869 with age's 'info' = label."""
     prk = hmac.new(salt, ikm, hashlib.sha256).digest()
@@ -49,6 +41,8 @@ def _hkdf_sha256(salt: bytes, label: bytes, ikm: bytes, length: int) -> bytes:
 
 
 def _scrypt(salt: bytes, password: bytes, work: int) -> bytes:
+    if work > 20:
+        raise ValueError("scrypt work factor too high")  # cap DoS from untrusted files
     n = 1 << work
     return hashlib.scrypt(password, salt=salt, n=n, r=8, p=1, dklen=32, maxmem=128 * 8 * n + (1 << 20))
 

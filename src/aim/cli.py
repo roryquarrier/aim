@@ -94,20 +94,49 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
         click.echo(f"error: a {harness_name} process appears to be running; stop it or use --force", err=True)
         sys.exit(5)
     state = reader.state()
-    # restore secrets: decrypt vault, substitute ${secret:NAME} placeholders
+    # restore secrets: decrypt vault, substitute ${secret:NAME} placeholders EVERYWHERE
     if "secrets/secrets.age" in reader.manifest().hashes:
         from aim import secrets as secrets_mod
         passphrase = passphrase or os.environ.get("AIM_PASSPHRASE")
         if not passphrase:
             passphrase = click.prompt("Vault passphrase", hide_input=True)
         vault = _json.loads(secrets_mod.decrypt(reader.read("secrets/secrets.age"), passphrase))
-        restored = 0
-        for d in state.documents:
+
+        def fill(txt: str) -> str:
             for ph, val in vault.items():
-                if ph in d.content:
-                    d.content = d.content.replace(ph, val)
-                    restored += 1
-        click.echo(f"secrets restored: {restored} placeholder(s) filled from vault")
+                if ph in txt:
+                    txt = txt.replace(ph, val)
+            return txt
+
+        def walk(obj):
+            if isinstance(obj, str):
+                return fill(obj)
+            if isinstance(obj, list):
+                return [walk(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: walk(v) for k, v in obj.items()}
+            return obj
+
+        for d in state.documents:
+            d.content = fill(d.content)
+        for s in state.skills:
+            s.skill_md = fill(s.skill_md)
+            filled: dict[str, bytes] = {}
+            for k, v in s.scripts.items():
+                if isinstance(v, (bytes, bytearray)):
+                    filled[k] = fill(v.decode("utf-8", "replace")).encode()
+                else:
+                    filled[k] = str(walk(v)).encode()
+            s.scripts = filled
+        for j in state.jobs:
+            j.command = fill(j.command)
+            if j.deliver_to:
+                j.deliver_to = fill(j.deliver_to)
+        for m in state.mcp:
+            m.command = fill(m.command) if m.command else m.command
+            m.args = [fill(a) for a in m.args]
+            m.env_refs = {k: fill(v) for k, v in m.env_refs.items()}
+        click.echo("secrets restored: placeholders filled from vault")
     mapping = path_map(list(maps))
     if mapping:
         n = 0

@@ -56,8 +56,15 @@ def load_skills(home: Path, skills_dir: str, harness: str):
         name = skill_md.parent.name
         scripts = {}
         for f in skill_md.parent.rglob("*"):
-            if f.is_file() and f.name != "SKILL.md":
-                scripts[str(f.relative_to(skill_md.parent))] = f.read_bytes()
+            if f.name == "SKILL.md" or not f.is_file():
+                continue
+            # skip pycache, dotfiles, hidden dirs, big binaries, symlinks
+            rel_parts = f.relative_to(skill_md.parent).parts
+            if any(p.startswith(".") or p == "__pycache__" for p in rel_parts):
+                continue
+            if f.is_symlink() or f.stat().st_size > 512 * 1024:
+                continue
+            scripts[str(f.relative_to(skill_md.parent))] = f.read_bytes()
         skills.append(Skill(name=name, skill_md=skill_md.read_text("utf-8", "replace"), scripts=scripts))
     return skills
 
