@@ -20,7 +20,7 @@ class ClaudeCodeAdapter(Adapter):
         return Path.home() / ".claude"
 
     def detect(self, home: Path) -> bool:
-        return (home / ".claude.json").is_file() or (home / "CLAUDE.md").is_file()
+        return (home.parent / ".claude.json").is_file() or (home / "CLAUDE.md").is_file()
 
     def export(self, home: Path) -> AgentState:
         state = AgentState(source_harness=self.name, source_os=source_os())
@@ -43,7 +43,7 @@ class ClaudeCodeAdapter(Adapter):
         state.documents = docs
         state.skills = load_skills(home, "skills", self.name)
         # MCP from .claude.json (user scope) — mcpServers blocks
-        cj = home / ".claude.json"
+        cj = home.parent / ".claude.json"  # real location: ~/.claude.json (sibling of ~/.claude)
         if cj.is_file():
             try:
                 data = json.loads(cj.read_text("utf-8"))
@@ -70,7 +70,7 @@ class ClaudeCodeAdapter(Adapter):
             dry_run=dry_run,
         )
         # merge MCP into .claude.json (preserve existing); always ensure the file exists
-        cj = home / ".claude.json"
+        cj = home.parent / ".claude.json"  # real location: ~/.claude.json (sibling of ~/.claude)
         data = {}
         if cj.is_file():
             try:

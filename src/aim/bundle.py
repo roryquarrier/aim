@@ -97,7 +97,9 @@ class BundleReader:
                 failures.append(f"{relpath}: listed in manifest but missing from bundle")
         return failures
 
-    def state(self) -> AgentState:
+    def state(self, text_override: str | None = None) -> AgentState:
+        if text_override is not None:
+            return AgentState.model_validate_json(text_override)
         self.read("state.json")  # ensure present
         return AgentState.model_validate_json(self.read("state.json"))
 

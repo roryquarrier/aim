@@ -86,7 +86,7 @@ def snapshot_home(home: Path) -> Path | None:
         return None
     import time
     bak = home.parent / f"{home.name}.aimbak.{int(time.time())}"
-    shutil.copytree(home, bak)
+    shutil.copytree(home.resolve() if home.is_symlink() else home, bak, symlinks=True, ignore_dangling_symlinks=True)
     for root, dirs, files in os.walk(bak):
         for d in dirs:
             os.chmod(Path(root) / d, 0o700)

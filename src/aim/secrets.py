@@ -41,7 +41,7 @@ def _hkdf_sha256(salt: bytes, label: bytes, ikm: bytes, length: int) -> bytes:
 
 
 def _scrypt(salt: bytes, password: bytes, work: int) -> bytes:
-    if work > 20:
+    if work > 18:
         raise ValueError("scrypt work factor too high")  # cap DoS from untrusted files
     n = 1 << work
     return hashlib.scrypt(password, salt=salt, n=n, r=8, p=1, dklen=32, maxmem=128 * 8 * n + (1 << 20))

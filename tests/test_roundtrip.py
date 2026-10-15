@@ -48,7 +48,8 @@ def make_claude_home(root: Path) -> Path:
     (home / "CLAUDE.md").write_text("# Claude persona\nCareful reviewer.")
     proj.joinpath("note.md").write_text("project fact: build passes on py3.10")
     (home / "skills" / "review" / "SKILL.md").write_text("# review\nAlways run tests")
-    (home / ".claude.json").write_text(json.dumps({"mcpServers": {"ctx": {"command": "npx", "args": ["-y", "ctx"], "env": {}}}}))
+    home.parent.mkdir(parents=True, exist_ok=True)
+    (home.parent / ".claude.json").write_text(json.dumps({"mcpServers": {"ctx": {"command": "npx", "args": ["-y", "ctx"], "env": {}}}}))
     return home
 
 
@@ -200,7 +201,7 @@ class TestCrossHarness:
         target = tmp_path / ".claude"
         ClaudeCodeAdapter().import_(state, target)
         assert (target / "CLAUDE.md").read_text().startswith("# Persona")
-        assert (target / ".claude.json").exists()
+        assert (target.parent / ".claude.json").exists()
 
     def test_bundle_idempotent_export(self, hermes_home, tmp_path):
         """export(bundle(extract(export))) == export at CIF level (SPEC §2.2)."""

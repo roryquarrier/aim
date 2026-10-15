@@ -93,8 +93,10 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
     if harness_running(harness_name) and not force:
         click.echo(f"error: a {harness_name} process appears to be running; stop it or use --force", err=True)
         sys.exit(5)
-    state = reader.state()
-    # restore secrets: decrypt vault, substitute ${secret:NAME} placeholders EVERYWHERE
+    # restore secrets: decrypt vault, substitute ${secret:NAME} placeholders on the
+    # RAW state.json text BEFORE parsing — values keep their JSON-escaped form,
+    # so PEM keys / newlines restore exactly and binary scripts stay untouched.
+    raw_state: str | None = None
     if "secrets/secrets.age" in reader.manifest().hashes:
         from aim import secrets as secrets_mod
         passphrase = passphrase or os.environ.get("AIM_PASSPHRASE")
@@ -102,41 +104,17 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
             passphrase = click.prompt("Vault passphrase", hide_input=True)
         vault = _json.loads(secrets_mod.decrypt(reader.read("secrets/secrets.age"), passphrase))
 
-        def fill(txt: str) -> str:
-            for ph, val in vault.items():
-                if ph in txt:
-                    txt = txt.replace(ph, val)
-            return txt
+        # match placeholder whether it appears raw or JSON-escaped in the state text
+        def json_escape(s: str) -> str:
+            return _json.dumps(s)[1:-1]
 
-        def walk(obj):
-            if isinstance(obj, str):
-                return fill(obj)
-            if isinstance(obj, list):
-                return [walk(x) for x in obj]
-            if isinstance(obj, dict):
-                return {k: walk(v) for k, v in obj.items()}
-            return obj
-
-        for d in state.documents:
-            d.content = fill(d.content)
-        for s in state.skills:
-            s.skill_md = fill(s.skill_md)
-            filled: dict[str, bytes] = {}
-            for k, v in s.scripts.items():
-                if isinstance(v, (bytes, bytearray)):
-                    filled[k] = fill(v.decode("utf-8", "replace")).encode()
-                else:
-                    filled[k] = str(walk(v)).encode()
-            s.scripts = filled
-        for j in state.jobs:
-            j.command = fill(j.command)
-            if j.deliver_to:
-                j.deliver_to = fill(j.deliver_to)
-        for m in state.mcp:
-            m.command = fill(m.command) if m.command else m.command
-            m.args = [fill(a) for a in m.args]
-            m.env_refs = {k: fill(v) for k, v in m.env_refs.items()}
+        raw = reader.read("state.json").decode("utf-8", "replace")
+        for ph, val in vault.items():
+            esc_val = json_escape(val)
+            raw = raw.replace(json_escape(ph), esc_val)  # escaped form (inside strings)
+        raw_state = raw
         click.echo("secrets restored: placeholders filled from vault")
+    state = reader.state(text_override=raw_state)
     mapping = path_map(list(maps))
     if mapping:
         n = 0

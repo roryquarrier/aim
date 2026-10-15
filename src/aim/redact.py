@@ -9,23 +9,28 @@ from __future__ import annotations
 import re
 
 # High-confidence named patterns, run FIRST against the original bytes.
+# PATTERNS with a capture group: ONLY the group is redacted (key name kept).
 PATTERNS: dict[str, re.Pattern] = {
     "ANTHROPIC_API_KEY": re.compile(rb"sk-ant-[A-Za-z0-9_-]{20,}"),
-    "OPENAI_API_KEY": re.compile(rb"\bsk-(?![a-z-])[A-Za-z0-9_-]{20,}"),
+    "OPENAI_API_KEY": re.compile(rb"\bsk-(?!ant-)[A-Za-z0-9_-]{20,}"),
     "TELEGRAM_BOT_TOKEN": re.compile(rb"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
     "GITHUB_TOKEN": re.compile(rb"gh[pousr]_[A-Za-z0-9]{36,}"),
     "AWS_ACCESS_KEY": re.compile(rb"\bAKIA[0-9A-Z]{16}\b"),
-    "STRIPE_KEY": re.compile(rb"\bsk_live_[A-Za-z0-9]{20,}\b"),
-    "SLACK_TOKEN": re.compile(rb"\bxox[bp]-[A-Za-z0-9-]{10,}\b"),
+    "STRIPE_KEY": re.compile(rb"\b[sr]k_(?:live|test)_[A-Za-z0-9]{20,}\b"),
+    "SLACK_TOKEN": re.compile(rb"\bxox[abeps]-[A-Za-z0-9-]{10,}\b"),
     "GOOGLE_KEY": re.compile(rb"\bAIza[0-9A-Za-z_-]{30,}\b"),
-    "AWS_SECRET_KEY": re.compile(rb"""(?i)aws_secret_access_key[\"'`\s:=]+([A-Za-z0-9/+=]{30,})"""),
+    "AWS_SECRET_KEY": re.compile(rb"""(?i)(aws_secret_access_key)[\"'`\s:=]+([A-Za-z0-9/+=]{30,})"""),
     "JSON_WEB_TOKEN": re.compile(rb"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
     "PRIVATE_KEY_BLOCK": re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
 }
 
-# Key-path assignments (yaml/toml/json/env): key looks secret AND value still intact
+# Key-path assignments (yaml/toml/json/env): key looks secret AND value still intact.
+# Value class extended: specials + short passwords allowed (min 8) when key says password/secret.
 ASSIGN_RE = re.compile(
-    rb"(?i)(?<![$:{])(token|api[_-]?key|secret|password|bearer)[\"'`\s:=]+([A-Za-z0-9_\-/+]{16,})"
+    rb"""(?i)(?<![$:{])(token|api[_-]?key|secret|password|bearer)[\"'`\s:=]+([A-Za-z0-9_\-/+=!@#$%^&*.,;:]{16,})"""
+)
+PASSWORD_RE = re.compile(
+    rb"""(?i)(?<![$:{])(password|passwd|secret)[\"'`\s:=]+["']?([!-~]{8,64})["']?(?=\s|$|["'})\],])"""
 )
 
 
@@ -67,11 +72,16 @@ def scan_bytes(data: bytes, path_hint: str = "") -> tuple[bytes, RedactionResult
     result = RedactionResult()
     namer = _Namer(result)
 
-    # Pass 1: named high-confidence patterns.
+    # Pass 1: named high-confidence patterns. Patterns WITH a capture group keep
+    # the preceding key-name text; only the LAST group is redacted.
     for name, pattern in PATTERNS.items():
         def sub_named(match: re.Match, _n=name) -> bytes:
-            value = match.group(1) if match.groups() else match.group(0)
-            return namer.ph_for(_n, value)
+            ng = match.re.groups  # number of groups in this pattern
+            if ng:
+                value = match.group(ng)  # last group = the secret value
+                prefix = match.group(0).rsplit(value, 1)[0]  # text before value
+                return prefix + namer.ph_for(_n, value)
+            return namer.ph_for(_n, match.group(0))
         data = pattern.sub(sub_named, data)
 
     # Pass 2: assignment-style. Skip if the overall match already contains a placeholder
@@ -86,4 +96,13 @@ def scan_bytes(data: bytes, path_hint: str = "") -> tuple[bytes, RedactionResult
         return match.group(0).replace(value, ph)
 
     data = ASSIGN_RE.sub(sub_assign, data)
+
+    # Pass 3: short passwords (min 8) after key names — runs last, skips placeholders
+    def sub_pw(match: re.Match) -> bytes:
+        whole = match.group(0)
+        if b"${secret:" in whole:
+            return whole
+        return namer.ph_for("PASSWORD", match.group(2))
+
+    data = PASSWORD_RE.sub(sub_pw, data)
     return data, result
