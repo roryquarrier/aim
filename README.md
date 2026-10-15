@@ -6,7 +6,7 @@ memories, skills, cron jobs, config, and MCP bindings between *harnesses*
 
 Uses a neutral **Canonical Intermediate Format** (`.aim` zip bundle) so migration
 is N adapters, not N² point-to-point converters. Design spec: see
-`~/migration-research/SPEC.md` (v2, Opus-reviewed).
+`docs/SPEC.md` (v2, Opus-reviewed).
 
 ## Quick start (dev, zero-install)
 
@@ -15,20 +15,20 @@ cd ~/projects/aim
 export PYTHONPATH=src
 
 # Export the live Hermes agent (redaction gate blocks if secrets detected)
-/usr/bin/python3 -m aim.cli export --harness hermes --home ~/.hermes -o agent.aim
+python3 -m aim.cli export --harness hermes --home ~/.hermes -o agent.aim
 
 # Preview what lands where before writing anything
-/usr/bin/python3 -m aim.cli plan agent.aim --harness openclaw
+python3 -m aim.cli plan agent.aim --harness openclaw
 
 # Import into another harness home (transactional: backup + atomic swap)
-OPENCLAW_HOME=/path/to/.openclaw /usr/bin/python3 -m aim.cli import agent.aim \
+OPENCLAW_HOME=/path/to/.openclaw python3 -m aim.cli import agent.aim \
     --harness openclaw --force --map /home/hal=/Users/rory
 
-/usr/bin/python3 -m aim.cli list agent.aim
-/usr/bin/python3 -m aim.cli adapters list
+python3 -m aim.cli list agent.aim
+python3 -m aim.cli adapters list
 ```
 
-Requires: python3 with `click pydantic pyyaml pytest` (on this box: `/usr/bin/python3`).
+Requires: python3 with `click pydantic pyyaml pytest` (on this box: `python3`).
 
 ## Guarantees
 

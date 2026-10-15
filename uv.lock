@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "aim-migrate"
-version = "0.1.0"
+version = "0.2.4"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -14,9 +14,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-crypto = [
-    { name = "cryptography" },
-]
 dev = [
     { name = "pytest" },
 ]
@@ -25,12 +22,11 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.0" },
     { name = "cryptography", specifier = ">=41.0" },
-    { name = "cryptography", marker = "extra == 'crypto'", specifier = ">=41.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
-provides-extras = ["crypto", "dev"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "annotated-types"

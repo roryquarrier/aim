@@ -323,6 +323,29 @@ class TestSecretsVault:
         assert b'"password"' in clean2  # key name preserved, JSON intact
 
 
+    def test_malicious_bundle_paths_rejected(self, tmp_path):
+        """Regression: crafted bundle paths must not escape the target home."""
+        import pytest as _pytest
+        from aim.adapters.common import _safe_relpath
+        home = tmp_path / "h"
+        home.mkdir()
+        for bad in ("/etc/passwd", "../../escape", "C:\\Windows\\evil", "~/.ssh/authorized_keys", "a/../../b"):
+            with _pytest.raises(ValueError):
+                _safe_relpath(home, bad, "test")
+        # good path still passes
+        _safe_relpath(home, "memories/x.md", "test")
+
+    def test_malicious_skill_name_rejected(self, tmp_path):
+        from aim.canonical.models import AgentState, Skill, Document, Kind
+        from aim.adapters.common import write_common_import
+        state = AgentState(source_harness="hermes", source_os="linux", documents=[], skills=[
+            Skill(name="../evil", skill_md="x"),
+        ])
+        import pytest as _pytest
+        with _pytest.raises(ValueError):
+            write_common_import(state, tmp_path / "t", "SOUL.md", lambda d: d.path, dry_run=False)
+
+
 class TestAdjust:
     def test_path_remap(self):
         from aim.osadjust.adjust import remap_text

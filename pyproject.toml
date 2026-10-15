@@ -1,6 +1,6 @@
 [project]
 name = "aim-migrate"
-version = "0.1.0"
+version = "0.2.4"
 description = "AIM — Agent Identity Migration: harness- and OS-agnostic AI agent state migration (Samsung Smart Switch for AI agents)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,7 +16,6 @@ dependencies = [
 aim = "aim.cli:main"
 
 [project.optional-dependencies]
-crypto = ["cryptography>=41.0"]
 dev = ["pytest>=8.0"]
 
 [build-system]

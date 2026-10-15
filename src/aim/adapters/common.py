@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import platform
+import os
 from pathlib import Path
 
 from aim.canonical.models import (
@@ -69,6 +70,19 @@ def load_skills(home: Path, skills_dir: str, harness: str):
     return skills
 
 
+def _safe_relpath(home: Path, rel: str, what: str) -> Path:
+    """Reject absolute paths, .., drive letters, and anything escaping home."""
+    import re as _re
+    if not rel or "\x00" in rel:
+        raise ValueError(f"invalid {what} path: {rel!r}")
+    if _re.match(r"^[A-Za-z]:", rel) or rel.startswith(("/", "\\")) or rel.startswith("~"):
+        raise ValueError(f"absolute {what} path rejected: {rel!r}")
+    p = (home / rel).resolve()
+    if not str(p).startswith(str(home.resolve()) + os.sep) and p != home.resolve():
+        raise ValueError(f"{what} path escapes target home: {rel!r}")
+    return p
+
+
 def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_rel_fn, dry_run: bool) -> list[GapItem]:
     """Write persona+memory+skills into a target home; returns gap items."""
     gaps: list[GapItem] = []
@@ -84,17 +98,20 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
             continue
         rel = memory_rel_fn(d)
         if not dry_run:
-            p = home / rel
+            p = _safe_relpath(home, rel, "document")
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(d.content, "utf-8")
         gaps.append(GapItem(item=f"{d.kind.value}:{rel}", policy="native"))
     for s in state.skills:
+        import re as _re2
+        if not _re2.fullmatch(r"[A-Za-z0-9._-]+", s.name):
+            raise ValueError(f"invalid skill name rejected: {s.name!r}")
         sdir = home / "skills" / s.name
         if not dry_run:
             sdir.mkdir(parents=True, exist_ok=True)
             (sdir / "SKILL.md").write_text(s.skill_md, "utf-8")
             for rel, blob in s.scripts.items():
-                f = sdir / rel
+                f = _safe_relpath(sdir, rel, "skill script")
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_bytes(blob)
                 f.chmod(0o755)
