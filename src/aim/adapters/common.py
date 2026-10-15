@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import platform
 import os
+import re
 from pathlib import Path
 
 from aim.canonical.models import (
@@ -70,13 +71,22 @@ def load_skills(home: Path, skills_dir: str, harness: str):
     return skills
 
 
+_WIN_RESERVED = re.compile(
+    r"(?:^|[\\/])(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", re.IGNORECASE
+)
+
+
 def _safe_relpath(home: Path, rel: str, what: str) -> Path:
-    """Reject absolute paths, .., drive letters, and anything escaping home."""
-    import re as _re
+    """Reject absolute paths, .., drive letters, UNC, Windows-reserved names,
+    scheme-like names, trailing dots/spaces, and anything escaping home."""
     if not rel or "\x00" in rel:
         raise ValueError(f"invalid {what} path: {rel!r}")
-    if _re.match(r"^[A-Za-z]:", rel) or rel.startswith(("/", "\\")) or rel.startswith("~"):
-        raise ValueError(f"absolute {what} path rejected: {rel!r}")
+    if rel != rel.rstrip(". "):
+        raise ValueError(f"trailing dot/space in {what} path: {rel!r}")
+    if re.match(r"^[A-Za-z]:", rel) or rel.startswith(("/", "\\", "~")) or "://" in rel or rel.startswith("//") or ":" in rel.split("/")[0].split("\\")[0]:
+        raise ValueError(f"absolute/UNC/scheme {what} path rejected: {rel!r}")
+    if _WIN_RESERVED.search(rel):
+        raise ValueError(f"Windows-reserved {what} path rejected: {rel!r}")
     p = (home / rel).resolve()
     if not str(p).startswith(str(home.resolve()) + os.sep) and p != home.resolve():
         raise ValueError(f"{what} path escapes target home: {rel!r}")
