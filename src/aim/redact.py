@@ -16,7 +16,7 @@ PATTERNS: dict[str, re.Pattern] = {
 
 # Key-path assignments (yaml/toml/json/env): key looks secret AND value still intact
 ASSIGN_RE = re.compile(
-    rb"(?i)(token|api[_-]?key|secret|password|bearer)[\"'`\s:=]+([A-Za-z0-9_\-/+]{16,})"
+    rb"(?i)(?<![$:{])(token|api[_-]?key|secret|password|bearer)[\"'`\s:=]+([A-Za-z0-9_\-/+]{16,})"
 )
 
 
@@ -45,11 +45,12 @@ def scan_bytes(data: bytes, path_hint: str = "") -> tuple[bytes, RedactionResult
             return placeholder
         data = pattern.sub(sub_named, data)
 
-    # Pass 2: assignment-style. Skip values already replaced (contains "${secret:").
+    # Pass 2: assignment-style. Skip if the overall match already contains a placeholder
     def sub_assign(match: re.Match) -> bytes:
+        whole = match.group(0)
+        if b"${secret:" in whole:
+            return whole
         value = match.group(2)
-        if b"${secret:" in value:
-            return match.group(0)
         key_part = match.group(1)
         ph = f"${{secret:{key_part.decode().upper().replace('-', '_')}}}".encode()
         result.redacted.setdefault(ph.decode(), value.decode("utf-8", "replace"))

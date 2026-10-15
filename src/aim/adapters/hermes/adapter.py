@@ -34,11 +34,20 @@ class HermesAdapter(Adapter):
             persona_paths=["SOUL.md", "memories/USER.md"],
             memory_globs=["memories/MEMORY.md", "memories/*.md"],
         )
-        # USER.md is profile, not persona — fix kinds
+        # USER.md is profile, not persona — fix kinds; dedupe glob overlap
+        from aim.canonical.models import Kind
+        seen: dict[str, int] = {}
+        deduped = []
         for d in state.documents:
+            if d.path in seen:
+                deduped[seen[d.path]] = d  # later (typed) copy wins
+                continue
+            seen[d.path] = len(deduped)
+            deduped.append(d)
+        for d in deduped:
             if d.path.endswith("USER.md"):
-                from aim.canonical.models import Kind
                 d.kind = Kind.profile
+        state.documents = deduped
         state.skills = load_skills(home, "skills", self.name)
         # cron jobs: single cron/jobs.json {"jobs":[...]} (verified live layout 2026-10-14)
         jobs = []

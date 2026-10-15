@@ -239,6 +239,53 @@ class TestCLI:
         assert (target / "workspace" / "SOUL.md").exists()
 
 
+class TestSecretsVault:
+    def test_age_roundtrip(self):
+        from aim.secrets import encrypt, decrypt
+        for data in (b"hi", b"", b"x" * 65536, b"x" * 65537, bytes(range(256)) * 300):
+            assert decrypt(encrypt(data, "pw"), "pw") == data
+        with pytest.raises(ValueError):
+            decrypt(encrypt(b"x", "p"), "wrong")
+
+    def test_export_with_secrets_e2e(self, tmp_path, monkeypatch):
+        """Secret in memory -> redacted state + encrypted vault -> import restores it."""
+        from aim.adapters.hermes.adapter import HermesAdapter
+        from click.testing import CliRunner
+        from aim import cli
+
+        home = make_hermes_home(tmp_path)
+        (home / "memories" / "MEMORY.md").write_text(
+            "NOTE token: 123456789:AAFfKxhV0lz6mR8jPw3nQ4eS5tUvWxYz2Ab in use")
+        pkg = tmp_path / "s.aim"
+        runner = CliRunner()
+        r = runner.invoke(cli.main, [
+            "export", "--harness", "hermes", "--home", str(home),
+            "-o", str(pkg), "--with-secrets", "--passphrase", "pw9",
+        ])
+        assert r.exit_code == 0, r.output
+        assert "secrets vault:" in r.output
+
+        import zipfile
+        with zipfile.ZipFile(pkg) as z:
+            names = z.namelist()
+            state_txt = z.read("state.json")
+        assert "secrets/secrets.age" in names
+        assert b"AAFfKxhV" not in state_txt  # plaintext secret never in state
+        assert b"${secret:" in state_txt
+
+        # import with passphrase restores the secret
+        target = tmp_path / "oc"
+        target.mkdir()
+        r2 = runner.invoke(cli.main, [
+            "import", str(pkg), "--harness", "openclaw", "--home", str(target),
+            "--force", "--passphrase", "pw9",
+        ])
+        assert r2.exit_code == 0, r2.output
+        assert "secrets restored:" in r2.output
+        restored = (target / "workspace" / "memory" / "MEMORY.md").read_text()
+        assert "AAFfKxhV0lz6mR8jPw3nQ4eS5tUvWxYz2Ab" in restored
+
+
 class TestAdjust:
     def test_path_remap(self):
         from aim.osadjust.adjust import remap_text

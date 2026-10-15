@@ -1,6 +1,7 @@
 """AIM CLI (SPEC §3)."""
 from __future__ import annotations
 
+import os
 import sys
 
 import click
@@ -24,13 +25,14 @@ def main():
     """AIM — Agent Identity Migration. Move a stateful AI agent between harnesses and OSes."""
 
 
-@main.command()
+@main.command("export")
 @click.option("--harness", "harness_name", default="auto", help="Source harness")
 @click.option("--home", "home_dir", default=None, type=click.Path(), help="Harness home dir")
 @click.option("-o", "--output", default="agent.aim", type=click.Path(), help="Bundle path")
-@click.option("--with-secrets", is_flag=True, help="Include age-encrypted secrets vault (v1.1)")
+@click.option("--with-secrets", is_flag=True, help="Include age-encrypted secrets vault")
+@click.option("--passphrase", default=None, help="Vault passphrase (else $AIM_PASSPHRASE, else prompt)")
 @click.option("--allow-unredacted", is_flag=True, help="Proceed despite unclassifiable secret-like spans")
-def export(harness_name, home_dir, output, with_secrets, allow_unredacted):
+def export(harness_name, home_dir, output, with_secrets, passphrase, allow_unredacted):
     """Export a harness home into a portable .aim bundle."""
     from pathlib import Path
 
@@ -51,10 +53,18 @@ def export(harness_name, home_dir, output, with_secrets, allow_unredacted):
     clean, redaction = scan_bytes(raw)
     if redaction.count and not allow_unredacted and not with_secrets:
         click.echo(f"error: {redaction.count} secret-like span(s) found in exported state; "
-                   f"re-run with --allow-unredacted or --with-secrets (v1.1)", err=True)
+                   f"re-run with --allow-unredacted or --with-secrets", err=True)
         sys.exit(3)
     writer.add_bytes("state.json", clean)
-    # also redact skill scripts / docs payloads already serialized in state.json — scan covers it
+    if with_secrets and redaction.redacted:
+        from aim import secrets as secrets_mod
+        import json as _json
+        passphrase = passphrase or os.environ.get("AIM_PASSPHRASE")
+        if not passphrase:
+            passphrase = click.prompt("Vault passphrase", hide_input=True, confirmation_prompt=True)
+        vault = _json.dumps(redaction.redacted, indent=1).encode()
+        writer.add_bytes("secrets/secrets.age", secrets_mod.encrypt(vault, passphrase), mode=0o600)
+        click.echo(f"secrets vault: {len(redaction.redacted)} value(s) encrypted into secrets/secrets.age")
     out = writer.write(state, adapter_meta={"name": adapter.name, "version": "0.1.0"})
     click.echo(f"exported {home} -> {out} (harness={state.source_harness}, docs={len(state.documents)}, "
                f"skills={len(state.skills)}, jobs={len(state.jobs)}, secrets_redacted={redaction.count})")
@@ -65,16 +75,18 @@ def export(harness_name, home_dir, output, with_secrets, allow_unredacted):
 @click.option("--harness", "harness_name", required=True)
 @click.option("--home", "home_dir", default=None, type=click.Path())
 @click.option("--map", "maps", multiple=True, help="path mapping src=dst (repeatable)")
+@click.option("--passphrase", default=None, help="Secrets vault passphrase (else $AIM_PASSPHRASE, else prompt)")
 @click.option("--dry-run", is_flag=True)
 @click.option("--force", is_flag=True, help="Proceed even if a harness process appears to be running")
-def import_(bundle_path, harness_name, home_dir, maps, dry_run, force):
+def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, force):
     """Import an .aim bundle into a target harness home."""
+    import json as _json
     from pathlib import Path
 
     reader = bundle_mod.BundleReader(bundle_path)
     failures = reader.verify_hashes()
     if failures:
-        click.echo("error: bundle integrity check FAILED:", err=True)
+        click.echo("error: bundle integrity check FAILED:")
         for f in failures:
             click.echo(f"  {f}", err=True)
         sys.exit(4)
@@ -82,6 +94,20 @@ def import_(bundle_path, harness_name, home_dir, maps, dry_run, force):
         click.echo(f"error: a {harness_name} process appears to be running; stop it or use --force", err=True)
         sys.exit(5)
     state = reader.state()
+    # restore secrets: decrypt vault, substitute ${secret:NAME} placeholders
+    if "secrets/secrets.age" in reader.manifest().hashes:
+        from aim import secrets as secrets_mod
+        passphrase = passphrase or os.environ.get("AIM_PASSPHRASE")
+        if not passphrase:
+            passphrase = click.prompt("Vault passphrase", hide_input=True)
+        vault = _json.loads(secrets_mod.decrypt(reader.read("secrets/secrets.age"), passphrase))
+        restored = 0
+        for d in state.documents:
+            for ph, val in vault.items():
+                if ph in d.content:
+                    d.content = d.content.replace(ph, val)
+                    restored += 1
+        click.echo(f"secrets restored: {restored} placeholder(s) filled from vault")
     mapping = path_map(list(maps))
     if mapping:
         n = 0

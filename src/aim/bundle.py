@@ -46,7 +46,7 @@ class BundleWriter:
             source_os=state.source_os,
             adapter=adapter_meta,
         )
-        self.add_text("state.json", state.model_dump_json(indent=2))
+        self._files.setdefault("state.json", state.model_dump_json(indent=2).encode())  # redacted copy (if added by caller) wins
         for relpath, data in sorted(self._files.items()):
             if relpath != "manifest.json":
                 manifest.hashes[relpath] = _sha256(data)
