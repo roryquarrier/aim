@@ -4,7 +4,8 @@
 
 **"Samsung Smart Switch" for AI agents:** migrate a stateful agent's persona,
 memories, skills, cron jobs, config, and MCP bindings between *harnesses*
-(Hermes ↔ OpenClaw ↔ Claude Code) and *operating systems* (Linux, WSL2, macOS).
+(Hermes ↔ OpenClaw ↔ Claude Code ↔ Codex CLI ↔ OpenCode) and *operating systems*
+(Linux, WSL2, macOS, Windows).
 
 Uses a neutral **Canonical Intermediate Format** (`.aim` zip bundle) so migration
 is N adapters, not N² point-to-point converters. Design spec: see
@@ -30,13 +31,33 @@ python3 -m aim.cli list agent.aim
 python3 -m aim.cli adapters list
 ```
 
-Requires: python3 with `click pydantic pyyaml pytest` (on this box: `python3`).
+Requires: python3 with `click pydantic pyyaml cryptography pytest`.
+
+## Adapters
+
+| Harness | Persona | Memory | Skills | Config | MCP | Cron |
+|---|---|---|---|---|---|---|
+| Hermes | SOUL.md | memories/ | skills/ | yaml | ✓ | ✓ |
+| OpenClaw | personality | memory store | skills | json | ✓ | ✓ |
+| Claude Code | CLAUDE.md | projects/*/memory | skills/ | — | .claude.json | park |
+| Codex CLI | AGENTS.md | — | skills/ + .agents/skills | config.toml | — | park |
+| OpenCode | AGENTS.md | — | skills/ | opencode.json | — | park |
+
+## Testing
+
+- `pytest tests/` — 24 unit/round-trip tests
+- CI matrix: ubuntu + macOS + Windows on every push
+- `tests/e2e/container_test.sh` — fully isolated Docker E2E (repo read-only,
+  throwaway workdir, `--network none`): secrets leak check, wrong-passphrase
+  rejection, cross-harness imports, full suite
 
 ## Guarantees
 
 - **Integrity**: every file sha256-hashed in manifest; import refuses on any mismatch
 - **Secrets**: gitleaks-style redaction scan at export; export *fails* on
-  secret-like spans unless `--allow-unredacted` (encrypted vault = v1.1)
+  secret-like spans unless `--allow-unredacted`. Optional `--with-secrets`
+  builds an encrypted vault (age-style scrypt + ChaCha20-Poly1305) inside the
+  bundle; `import --passphrase` restores values byte-exact
 - **Transactionality**: staged copy → validate → atomic rename; 0600 backup;
   refuses if target harness process is running (override `--force`)
 - **Lossless-first**: skills copy verbatim (mode bits preserved); unsupportable
