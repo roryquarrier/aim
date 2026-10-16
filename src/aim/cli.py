@@ -8,8 +8,10 @@ import click
 
 from aim import bundle as bundle_mod
 from aim.adapters.claude_code import adapter as _c  # noqa: F401
+from aim.adapters.codex import adapter as _cx  # noqa: F401
 from aim.adapters.hermes import adapter as _h  # noqa: F401 register
 from aim.adapters.openclaw import adapter as _o  # noqa: F401
+from aim.adapters.opencode import adapter as _oc  # noqa: F401
 from aim.adapters.base import all_adapters, autodetect, get as get_adapter
 from aim.osadjust.adjust import (
     harness_running,

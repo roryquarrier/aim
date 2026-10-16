@@ -346,6 +346,87 @@ class TestSecretsVault:
             write_common_import(state, tmp_path / "t", "SOUL.md", lambda d: d.path, dry_run=False)
 
 
+def make_codex_home(root: Path) -> Path:
+    home = root / ".codex"
+    (home / "skills" / "deploy").mkdir(parents=True)
+    (home / "AGENTS.md").write_text("# Codex persona\nShip carefully.")
+    (home / "config.toml").write_text('model = "gpt-6"\nsandbox_mode = "workspace-write"\n\n[features]\nskills = true\n')
+    (home / "skills" / "deploy" / "SKILL.md").write_text("# deploy\nUse blue-green deploys")
+    return home
+
+
+def make_opencode_home(root: Path) -> Path:
+    home = root / ".config" / "opencode"
+    (home / "skills" / "review").mkdir(parents=True)
+    (home / "agents").mkdir(parents=True)
+    (home / "command").mkdir(parents=True)
+    (home / "AGENTS.md").write_text("# OpenCode persona\nConcise answers.")
+    (home / "opencode.json").write_text('{"theme": "dark", "model": "anthropic/opus"}')
+    (home / "skills" / "review" / "SKILL.md").write_text("# review\nCheck tests first")
+    (home / "agents" / "reviewer.md").write_text("# reviewer\nStrict reviewer agent")
+    (home / "command" / "ship.md").write_text("/ship — release checklist")
+    return home
+
+
+@pytest.fixture
+def codex_home(tmp_path):
+    return make_codex_home(tmp_path)
+
+
+@pytest.fixture
+def opencode_home(tmp_path):
+    return make_opencode_home(tmp_path)
+
+
+class TestNewAdapters:
+    def test_codex_export(self, codex_home):
+        from aim.adapters.codex.adapter import CodexAdapter
+        state = CodexAdapter().export(codex_home)
+        assert any(d.kind == "persona" and "Ship carefully" in d.content for d in state.documents)
+        assert [s.name for s in state.skills] == ["deploy"]
+        keys = {c.key: c.value for c in state.config}
+        assert keys.get("model") == "gpt-6"
+        assert keys.get("features.skills") is True
+
+    def test_hermes_to_codex_and_opencode(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli
+        home = make_hermes_home(tmp_path)
+        pkg = tmp_path / "mig.aim"
+        r = CliRunner().invoke(cli.main, ["export", "--harness", "hermes", "--home", str(home), "-o", str(pkg)])
+        assert r.exit_code == 0, r.output
+        for tgt_name, harness in (("cxhome", "codex"), ("ochome", "opencode")):
+            tgt = tmp_path / tgt_name / "h"  # adapter home inside a sandbox dir
+            r2 = CliRunner().invoke(cli.main, [
+                "import", str(pkg), "--harness", harness, "--home", str(tgt), "--force"])
+            assert r2.exit_code == 0, (harness, r2.output)
+        # codex: persona + skills + .agents standard copy
+        cx = tmp_path / "cxhome"
+        assert (cx / "h" / "AGENTS.md").is_file()
+        assert (cx / "h" / "skills" / "trading" / "SKILL.md").is_file() or any(
+            (cx / "h" / "skills").glob("*/SKILL.md"))
+        assert (cx / ".agents" / "skills").is_dir()  # standard dir too
+        # opencode: persona + skills + jobs parked
+        oc = tmp_path / "ochome"
+        assert (oc / "h" / "AGENTS.md").is_file()
+        assert (oc / "h" / "unsupported" / "jobs.json").is_file()
+        assert any((oc / "h" / "skills").glob("*/SKILL.md"))
+
+    def test_codex_to_hermes(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli
+        cx = make_codex_home(tmp_path)
+        pkg = tmp_path / "c2h.aim"
+        r = CliRunner().invoke(cli.main, ["export", "--harness", "codex", "--home", str(cx), "-o", str(pkg)])
+        assert r.exit_code == 0, r.output
+        tgt = tmp_path / "hermes-in"
+        r2 = CliRunner().invoke(cli.main, [
+            "import", str(pkg), "--harness", "hermes", "--home", str(tgt), "--force"])
+        assert r2.exit_code == 0, r2.output
+        assert (tgt / "SOUL.md").is_file()
+        assert (tgt / "skills" / "deploy" / "SKILL.md").is_file()
+
+
 class TestAdjust:
     def test_path_remap(self):
         from aim.osadjust.adjust import remap_text

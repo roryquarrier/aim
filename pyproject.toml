@@ -1,6 +1,6 @@
 [project]
 name = "aim-migrate"
-version = "0.2.4"
+version = "0.3.0"
 description = "AIM — Agent Identity Migration: harness- and OS-agnostic AI agent state migration (Samsung Smart Switch for AI agents)"
 readme = "README.md"
 requires-python = ">=3.10"
