@@ -34,7 +34,7 @@ class ClaudeCodeAdapter(Adapter):
                 workspace_id = memdir.parent.name  # path-encoded cwd — re-keyed on import via --map
                 for f in sorted(memdir.glob("*.md")):
                     docs.append(Document(
-                        id=f"doc-{idx}", path=str(f.relative_to(home)),
+                        id=f"doc-{idx}", path=str(f.relative_to(home)).replace("\\", "/"),
                         scope=Scope.workspace, workspace_id=workspace_id,
                         kind=Kind.memory, content=f.read_text("utf-8", "replace"),
                         source_adapter=self.name,

@@ -37,7 +37,7 @@ def read_docs(home: Path, harness: str, persona_paths: list[str], memory_globs: 
             idx += 1
     for pattern in memory_globs:
         for p in sorted(home.glob(pattern)):
-            rel = str(p.relative_to(home))
+            rel = str(p.relative_to(home)).replace("\\", "/")
             docs.append(Document(
                 id=f"doc-{idx}", path=rel, scope=Scope.user,
                 kind=Kind.memory, content=p.read_text("utf-8", "replace"),
@@ -66,7 +66,7 @@ def load_skills(home: Path, skills_dir: str, harness: str):
                 continue
             if f.is_symlink() or f.stat().st_size > 512 * 1024:
                 continue
-            scripts[str(f.relative_to(skill_md.parent))] = f.read_bytes()
+            scripts[str(f.relative_to(skill_md.parent)).replace("\\", "/")] = f.read_bytes()
         skills.append(Skill(name=name, skill_md=skill_md.read_text("utf-8", "replace"), scripts=scripts))
     return skills
 
