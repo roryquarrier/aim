@@ -521,7 +521,7 @@ class TestV12TailAdapters:
     def test_roo_export_persona_from_default_mode(self, tmp_path, monkeypatch):
         from aim.adapters.roo.adapter import RooAdapter
         home = self._mk_roo(tmp_path)
-        monkeypatch.setenv("HOME", str(tmp_path))  # editor storage probe uses HOME
+        monkeypatch.setenv("ROO_EDITOR_STORAGE", str(tmp_path / ".config" / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings"))
         ad = RooAdapter()
         ad_roo_home = tmp_path / ".roo"
         state = ad.export(ad_roo_home)

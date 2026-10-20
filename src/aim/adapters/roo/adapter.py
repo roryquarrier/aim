@@ -33,8 +33,12 @@ class RooAdapter(Adapter):
         return Path(os.environ.get("ROO_HOME", str(Path.home() / ".roo")))
 
     def _editor_storage(self) -> Path | None:
-        """Probe the three editor globalStorage paths on this OS."""
+        """Probe the three editor globalStorage paths on this OS (ROO_EDITOR_STORAGE overrides)."""
         import os
+        override = os.environ.get("ROO_EDITOR_STORAGE")
+        if override:
+            p = Path(override)
+            return p if p.is_dir() else None
         home = Path.home()
         cands = []
         sysname = os.uname().sysname if hasattr(os, "uname") else ""
