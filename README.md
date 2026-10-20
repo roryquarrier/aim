@@ -4,8 +4,8 @@
 
 **"Samsung Smart Switch" for AI agents:** migrate a stateful agent's persona,
 memories, skills, cron jobs, config, and MCP bindings between *harnesses*
-(Hermes ↔ OpenClaw ↔ Claude Code ↔ Codex CLI ↔ OpenCode) and *operating systems*
-(Linux, WSL2, macOS, Windows).
+(Hermes ↔ OpenClaw ↔ Claude Code ↔ Codex CLI ↔ OpenCode ↔ Goose ↔ Buzz ↔ Grok Build)
+and *operating systems* (Linux, WSL2, macOS, Windows).
 
 Uses a neutral **Canonical Intermediate Format** (`.aim` zip bundle) so migration
 is N adapters, not N² point-to-point converters. Design spec: see
@@ -42,10 +42,13 @@ Requires: python3 with `click pydantic pyyaml cryptography pytest`.
 | Claude Code | CLAUDE.md | projects/*/memory | skills/ | — | .claude.json | park |
 | Codex CLI | AGENTS.md | — | skills/ + .agents/skills | config.toml | — | park |
 | OpenCode | AGENTS.md | — | skills/ | opencode.json | — | park |
+| Goose | AGENTS.md | sessions (opt-in) | skills/ | config.yaml | extensions | park |
+| Buzz | personas/ | relay-side (opt-in) | skills/ | agents/*.yaml | dev-mcp | workflows |
+| Grok Build | AGENTS.md | — | skills/ | settings.json | — | park |
 
 ## Testing
 
-- `pytest tests/` — 24 unit/round-trip tests
+- `pytest tests/` — 28 unit/round-trip tests
 - CI matrix: ubuntu + macOS + Windows on every push
 - `tests/e2e/container_test.sh` — fully isolated Docker E2E (repo read-only,
   throwaway workdir, `--network none`): secrets leak check, wrong-passphrase

@@ -378,6 +378,81 @@ def opencode_home(tmp_path):
     return make_opencode_home(tmp_path)
 
 
+class TestV12Adapters:
+    def _mk_goose(self, root):
+        home = root / ".config" / "goose"
+        (home / "skills" / "review").mkdir(parents=True)
+        (home / "AGENTS.md").write_text("# Goose persona\nPragmatic, terse.")
+        (home / "config.yaml").write_text("provider: anthropic\nmodel: opus\nextensions:\n  - id: dev-mcp\n")
+        (home / "skills" / "review" / "SKILL.md").write_text("# review\nTests first")
+        return home
+
+    def _mk_buzz(self, root):
+        home = root / ".buzz"
+        (home / "personas" / "jarvis").mkdir(parents=True)
+        (home / "agents").mkdir(parents=True)
+        (home / "workflows").mkdir(parents=True)
+        (home / "skills" / "relay").mkdir(parents=True)
+        (home / "personas" / "jarvis" / "persona.md").write_text("# Jarvis\nCareful, honest, concise.")
+        (home / "agents" / "helper.yaml").write_text("display-name: Helper\nsystem-prompt: Help concisely\nruntime: goose\n")
+        (home / "workflows" / "daily-digest.yaml").write_text("trigger: schedule\nschedule: '0 9 * * *'\naction: post-digest\n")
+        (home / "skills" / "relay" / "SKILL.md").write_text("# relay ops\nwatch #general")
+        return home
+
+    def _mk_grok(self, root):
+        home = root / ".grok"
+        (home / "skills" / "ship").mkdir(parents=True)
+        (home / "AGENTS.md").write_text("# Grok persona\nFast shipping.")
+        (home / "settings.json").write_text('{"model": "grok-4.7"}')
+        (home / "skills" / "ship" / "SKILL.md").write_text("# ship\nRelease checklist")
+        return home
+
+    def test_goose_roundtrip_and_hermes_import(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli
+        g = self._mk_goose(tmp_path)
+        pkg = tmp_path / "g.aim"
+        assert CliRunner().invoke(cli.main, ["export", "--harness", "goose", "--home", str(g), "-o", str(pkg)]).exit_code == 0
+        tgt = tmp_path / "hermes-in"
+        r = CliRunner().invoke(cli.main, ["import", str(pkg), "--harness", "hermes", "--home", str(tgt), "--force"])
+        assert r.exit_code == 0, r.output
+        assert (tgt / "SOUL.md").is_file()
+        assert (tgt / "skills" / "review" / "SKILL.md").is_file()
+
+    def test_buzz_export_captures_persona_agent_workflow(self, tmp_path):
+        from aim.adapters.buzz.adapter import BuzzAdapter
+        b = self._mk_buzz(tmp_path)
+        state = BuzzAdapter().export(b)
+        assert any(d.kind == "persona" and "Jarvis" in d.content for d in state.documents)
+        assert any(d.path.startswith("agents/") for d in state.documents)
+        assert len(state.jobs) == 1 and state.jobs[0].schedule == "0 9 * * *"
+        assert [s.name for s in state.skills] == ["relay"]
+
+    def test_hermes_to_buzz_import(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli
+        home = make_hermes_home(tmp_path)
+        pkg = tmp_path / "h2b.aim"
+        assert CliRunner().invoke(cli.main, ["export", "--harness", "hermes", "--home", str(home), "-o", str(pkg)]).exit_code == 0
+        tgt = tmp_path / "buzz-in"
+        r = CliRunner().invoke(cli.main, ["import", str(pkg), "--harness", "buzz", "--home", str(tgt), "--force"])
+        assert r.exit_code == 0, r.output
+        assert (tgt / "personas" / "imported" / "persona.md").is_file()
+        assert any((tgt / "skills").glob("*/SKILL.md"))
+        assert (tgt / "workflows" / "imported-schedule-0.yaml").is_file()  # 18 jobs parked as workflows
+
+    def test_grok_roundtrip(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli
+        g = self._mk_grok(tmp_path)
+        pkg = tmp_path / "k.aim"
+        assert CliRunner().invoke(cli.main, ["export", "--harness", "grok", "--home", str(g), "-o", str(pkg)]).exit_code == 0
+        tgt = tmp_path / "grok-in"
+        r = CliRunner().invoke(cli.main, ["import", str(pkg), "--harness", "hermes", "--home", str(tgt), "--force"])
+        assert r.exit_code == 0, r.output
+        assert (tgt / "SOUL.md").is_file()
+
+
 class TestNewAdapters:
     def test_codex_export(self, codex_home):
         from aim.adapters.codex.adapter import CodexAdapter
