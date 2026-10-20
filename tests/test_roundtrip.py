@@ -453,6 +453,87 @@ class TestV12Adapters:
         assert (tgt / "SOUL.md").is_file()
 
 
+class TestV12TailAdapters:
+    def _mk_dsh(self, root):
+        home = root / ".dsh"
+        (home / "skills" / "deploy").mkdir(parents=True)
+        (home / "profiles" / "web").mkdir(parents=True)
+        (home / "AGENTS.md").write_text("# DSH persona\nPlugin-driven, careful.")
+        (home / "settings.yaml").write_text("model:\n  route: deepseek-v4\nvision: false\n")
+        (home / "cordis.patch.yml").write_text("- id: schedule\n  name: '@deepseek-ai/dsh-schedule'\n")
+        (home / "profiles" / "web" / "package.json").write_text('{"dsh": {"profile": {"bundles": ["@deepseek-ai/dsh-base"]}}}')
+        (home / "skills" / "deploy" / "SKILL.md").write_text("# deploy\nBlue-green")
+        return home
+
+    def _mk_roo(self, root):
+        home = root / ".roo"
+        (home / "skills" / "review").mkdir(parents=True)
+        (home / "rules").mkdir(parents=True)
+        (home / "commands").mkdir(parents=True)
+        (home / "cli-settings.json").write_text('{"mode": "docs-writer", "provider": "anthropic"}')
+        (home / "rules" / "style.md").write_text("Sans-serif only.")
+        (home / "commands" / "ship.md").write_text("/ship checklist")
+        (home / "skills" / "review" / "SKILL.md").write_text("# review\nCheck tests")
+        # editor storage custom modes (default mode docs-writer = persona)
+        est = root / ".config" / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings"
+        est.mkdir(parents=True)
+        (est / "custom_modes.yaml").write_text(
+            "customModes:\n"
+            "  - slug: docs-writer\n"
+            "    name: Docs Writer\n"
+            "    roleDefinition: Technical writer persona.\n"
+            "    groups: [read]\n"
+            "  - slug: auditor\n"
+            "    name: Auditor\n"
+            "    roleDefinition: Strict auditor.\n"
+            "    groups: [read]\n")
+        (est / "mcp_settings.json").write_text('{"mcpServers": {"ctx": {"command": "npx"}}}')
+        return home
+
+    def test_dsh_export(self, tmp_path):
+        from aim.adapters.deepseek_harness.adapter import DeepseekHarnessAdapter
+        state = DeepseekHarnessAdapter().export(self._mk_dsh(tmp_path))
+        assert any(d.kind == "persona" and "Plugin-driven" in d.content for d in state.documents)
+        assert any(d.path == "profiles/web/package.json" for d in state.documents)
+        keys = {c.key for c in state.config}
+        assert "model.route" in keys and "cordis.patch" in keys
+        assert [s.name for s in state.skills] == ["deploy"]
+
+    def test_hermes_to_dsh_and_roo(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli
+        home = make_hermes_home(tmp_path)
+        pkg = tmp_path / "mig.aim"
+        assert CliRunner().invoke(cli.main, ["export", "--harness", "hermes", "--home", str(home), "-o", str(pkg)]).exit_code == 0
+        for tgt_name, harness in (("dshin", "deepseek-harness"), ("rooin", "roo")):
+            tgt = tmp_path / tgt_name
+            r = CliRunner().invoke(cli.main, ["import", str(pkg), "--harness", harness, "--home", str(tgt), "--force"])
+            assert r.exit_code == 0, (harness, r.output)
+        dsh = tmp_path / "dshin"
+        assert (dsh / "AGENTS.md").is_file()
+        assert any((dsh / "skills").glob("*/SKILL.md"))
+        assert (dsh.parent / ".agents" / "skills").is_dir()
+        roo = tmp_path / "rooin"
+        assert (roo / "rules" / "imported-persona.md").is_file()
+        assert (roo / "modes" / "custom_modes.yaml").is_file()
+        assert any((roo / "skills").glob("*/SKILL.md"))
+
+    def test_roo_export_persona_from_default_mode(self, tmp_path, monkeypatch):
+        from aim.adapters.roo.adapter import RooAdapter
+        home = self._mk_roo(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))  # editor storage probe uses HOME
+        ad = RooAdapter()
+        ad_roo_home = tmp_path / ".roo"
+        state = ad.export(ad_roo_home)
+        personas = [d for d in state.documents if d.kind == "persona"]
+        assert personas and "Technical writer" in personas[0].content  # defaultMode docs-writer
+        assert any(d.kind == "profile" and d.path.startswith("modes/") for d in state.documents)
+        assert any(d.path == "rules/style.md" and d.kind == "memory" for d in state.documents)
+        assert any(d.path == "commands/ship.md" for d in state.documents)
+        keys = {c.key for c in state.config}
+        assert "cli.mode" in keys and "mcp.ctx" in keys
+
+
 class TestNewAdapters:
     def test_codex_export(self, codex_home):
         from aim.adapters.codex.adapter import CodexAdapter

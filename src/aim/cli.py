@@ -15,6 +15,8 @@ from aim.adapters.opencode import adapter as _oc  # noqa: F401
 from aim.adapters.buzz import adapter as _bz  # noqa: F401
 from aim.adapters.goose import adapter as _gs  # noqa: F401
 from aim.adapters.grok import adapter as _gk  # noqa: F401
+from aim.adapters.deepseek_harness import adapter as _dsh  # noqa: F401
+from aim.adapters.roo import adapter as _roo  # noqa: F401
 from aim.adapters.base import all_adapters, autodetect, get as get_adapter
 from aim.osadjust.adjust import (
     harness_running,
