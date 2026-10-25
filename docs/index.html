@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIM — move your AI agent anywhere</title>
+<meta name="description" content="AIM migrates your AI agent's persona, memories, skills and settings between Claude Code, Codex, OpenCode, Goose, and 6 more harnesses — across Linux, macOS and Windows. Free, local, no telemetry.">
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: #0d1117; color: #e6edf3; line-height: 1.6; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 64px 20px; }
+  h1 { font-size: 2.4rem; line-height: 1.2; margin-bottom: 12px; font-weight: 700; }
+  .sub { font-size: 1.2rem; color: #9198a1; margin-bottom: 32px; }
+  .install { background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+             padding: 18px 20px; font-family: ui-monospace, monospace; font-size: 1.05rem;
+             margin-bottom: 40px; }
+  .install .c { color: #9198a1; }
+  h2 { font-size: 1.3rem; margin: 36px 0 12px; }
+  ul { list-style: none; }
+  li { padding: 6px 0 6px 26px; position: relative; }
+  li::before { content: "→"; position: absolute; left: 4px; color: #58a6ff; }
+  .term { background: #000; border: 1px solid #30363d; border-radius: 10px;
+          padding: 18px; font-family: ui-monospace, monospace; font-size: .92rem;
+          overflow-x: auto; white-space: pre; margin: 14px 0; }
+  .p { color: #3fb950; } .d { color: #58a6ff; } .m { color: #d2a8ff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+  .chip { background: #161b22; border: 1px solid #30363d; border-radius: 999px;
+          padding: 8px 14px; text-align: center; font-size: .95rem; }
+  a { color: #58a6ff; }
+  footer { margin-top: 56px; color: #656d76; font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Your AI agent isn't married to one CLI.</h1>
+  <p class="sub">AIM moves its persona, memories, skills, settings and secrets — between <b>10 harnesses</b>, across <b>Linux, macOS and Windows</b>. One command. Everything local.</p>
+
+  <div class="install">$ pipx install aim-migrate</div>
+
+  <div class="term">$ <span class="d">aim export</span> --harness claude-code -o move.aim
+<span class="p">exported ~/.claude → move.aim (persona=1, memories=2, skills=6, secrets=3 vaulted)</span>
+
+$ <span class="d">aim import</span> move.aim --harness codex
+<span class="p">imported move.aim → ~/.codex (files intact, skills placed, secrets restored)</span></div>
+
+  <h2>Works between</h2>
+  <div class="grid">
+    <div class="chip">Claude Code</div><div class="chip">Codex CLI</div>
+    <div class="chip">OpenCode</div><div class="chip">Goose</div>
+    <div class="chip">Hermes</div><div class="chip">OpenClaw</div>
+    <div class="chip">Buzz</div><div class="chip">Grok Build</div>
+    <div class="chip">DeepSeek Harness</div><div class="chip">Roo Code</div>
+  </div>
+  <p>Any pair, any direction, any OS. 31 tests, 3-OS CI, live spot-checks against real binaries.</p>
+
+  <h2>Your secrets stay yours</h2>
+  <ul>
+    <li>No telemetry, no account, no network calls — 100% local tool</li>
+    <li>API keys are auto-detected and moved into an encrypted vault</li>
+    <li>The vault is standard <a href="https://age-encryption.org">age</a> — decrypt it with the stock <span class="m">age</span> CLI any time</li>
+  </ul>
+
+  <h2>Why people switch (and why it hurt before)</h2>
+  <ul>
+    <li>39% of agent users run Claude Code, 16% Codex — and they move between them</li>
+    <li>Until now that meant rebuilding your persona, memory, skills and logins by hand</li>
+    <li>AIM is the missing "Smart Switch": export here, import there, done</li>
+  </ul>
+
+  <footer>MIT licensed · <a href="https://github.com/roryquarrier/aim">github.com/roryquarrier/aim</a> · <a href="https://github.com/roryquarrier/aim/blob/main/SECURITY.md">security</a></footer>
+</div>
+</body>
+</html>

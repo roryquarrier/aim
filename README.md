@@ -1,5 +1,12 @@
 # AIM — Agent Identity Migration
 
+[![tests](https://github.com/roryquarrier/aim/actions/workflows/tests.yml/badge.svg)](https://github.com/roryquarrier/aim/actions/workflows/tests.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/aim-migrate/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![age-compatible vault](https://img.shields.io/badge/vault-age%20v1%20compatible-8A2BE2)](SECURITY.md)
+
+**Install:** `pipx install aim-migrate` (or `pip install aim-migrate`) — then `aim export` / `aim import`. 100% local, no account, no telemetry.
+
 ![What AIM does](docs/infographic.png)
 
 **"Samsung Smart Switch" for AI agents:** migrate a stateful agent's persona,
