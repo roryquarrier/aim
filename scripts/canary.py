@@ -26,6 +26,25 @@ TARGETS = ["claude-code", "codex", "opencode", "goose", "grok", "deepseek-harnes
 GOLDEN = REPO / "docs" / "canary-golden.json"
 
 
+def make_hermes_home(root: Path) -> Path:
+    """Mirror of tests/test_roundtrip.py make_hermes_home (kept in sync by TestBackupRestore)."""
+    import json as _json
+    home = root / ".hermes"
+    (home / "memories").mkdir(parents=True)
+    (home / "skills" / "stitch-frontend").mkdir(parents=True)
+    (home / "cron").mkdir(parents=True)
+    (home / "SOUL.md").write_text("# Persona\nYou are Jarvis, concise technical expert.")
+    (home / "memories" / "MEMORY.md").write_text("VAULT=halHermes;index.md 1st\nUSER: ESL teacher ages 5-12")
+    (home / "memories" / "USER.md").write_text("USER: Rory, HK children market, sans-only design")
+    (home / "config.yaml").write_text("agent:\n  name: jarvis\nauto_source_bashrc: true\n")
+    (home / "skills" / "stitch-frontend" / "SKILL.md").write_text("# stitch-frontend\nUse Stitch CLI for designs.")
+    (home / "skills" / "stitch-frontend" / "run.sh").write_bytes(b"#!/bin/bash\necho stitch\n")
+    (home / "cron" / "jobs.json").write_text(_json.dumps({
+        "jobs": [{"name": "Weekly memory prune", "schedule": "0 4 * * 0", "prompt": "prune memories", "enabled": True}]
+    }))
+    return home
+
+
 def layout(home: Path) -> dict:
     out = {}
     for p in sorted(home.rglob("*")):
@@ -39,12 +58,7 @@ def run(mode: str) -> int:
     with tempfile.TemporaryDirectory(prefix="aim-canary-") as td:
         td = Path(td)
         bundle = td / "canary.aim"
-        # build the same synthetic hermes home the test suite uses
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("tr", REPO / "tests" / "test_roundtrip.py")
-        tr = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(tr)
-        fx_home = tr.make_hermes_home(td)
+        fx_home = make_hermes_home(td)
         r = runner.invoke(aim_cli.main, ["export", "--harness", "hermes",
                                          "--home", str(fx_home),
                                          "-o", str(bundle)], input="pw\npw\n")
