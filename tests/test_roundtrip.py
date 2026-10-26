@@ -647,9 +647,7 @@ class TestBackupRestore:
         home = tmp_path / "claude-home"
         (home / ".claude").mkdir(parents=True)
         (home / ".claude" / "CLAUDE.md").write_text("old persona")
-        # bundle from fixtures
-        import pathlib
-        fx = pathlib.Path(__file__).parent.parent / "fixtures" / "hermes"
+        fx = make_hermes_home(tmp_path)
         runner = CliRunner()
         r = runner.invoke(aim_cli.main, ["export", "--harness", "hermes", "--home", str(fx),
                                          "-o", str(tmp_path / "b.aim")], input="pw\npw\n")

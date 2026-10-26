@@ -12,6 +12,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(REPO / "tests")) if False else None
+
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
@@ -37,8 +39,14 @@ def run(mode: str) -> int:
     with tempfile.TemporaryDirectory(prefix="aim-canary-") as td:
         td = Path(td)
         bundle = td / "canary.aim"
+        # build the same synthetic hermes home the test suite uses
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("tr", REPO / "tests" / "test_roundtrip.py")
+        tr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tr)
+        fx_home = tr.make_hermes_home(td)
         r = runner.invoke(aim_cli.main, ["export", "--harness", "hermes",
-                                         "--home", str(REPO / "fixtures" / "hermes"),
+                                         "--home", str(fx_home),
                                          "-o", str(bundle)], input="pw\npw\n")
         if r.exit_code != 0:
             print("CANARY FAIL: export step broken:", r.output[-400:])

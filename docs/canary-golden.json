@@ -1,20 +1,119 @@
 {
  "buzz": {
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "personas": "dir",
+  "personas/imported": "dir",
+  "personas/imported/persona.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
   "unsupported": "dir",
   "unsupported/jobs.json": "file",
-  "workflows": "dir"
+  "workflows": "dir",
+  "workflows/imported-schedule-0.yaml": "file"
  },
- "claude-code": {},
- "codex": {},
- "deepseek-harness": {},
- "goose": {},
- "grok": {},
- "openclaw": {},
+ "claude-code": {
+  "CLAUDE.md": "file",
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
+ },
+ "codex": {
+  "AGENTS.md": "file",
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
+ },
+ "deepseek-harness": {
+  "AGENTS.md": "file",
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
+ },
+ "goose": {
+  "AGENTS.md": "file",
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
+ },
+ "grok": {
+  "AGENTS.md": "file",
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
+ },
+ "openclaw": {
+  "workspace": "dir",
+  "workspace/SOUL.md": "file",
+  "workspace/memory": "dir",
+  "workspace/memory/MEMORY.md": "file",
+  "workspace/memory/USER.md": "file",
+  "workspace/skills": "dir",
+  "workspace/skills/stitch-frontend": "dir",
+  "workspace/skills/stitch-frontend/SKILL.md": "file",
+  "workspace/skills/stitch-frontend/run.sh": "file",
+  "workspace/unsupported": "dir",
+  "workspace/unsupported/jobs.json": "file"
+ },
  "opencode": {
-  "agents": "dir"
+  "AGENTS.md": "file",
+  "agents": "dir",
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
  },
  "roo": {
+  "memories": "dir",
+  "memories/MEMORY.md": "file",
+  "memories/USER.md": "file",
   "modes": "dir",
-  "modes/custom_modes.yaml": "file"
+  "modes/custom_modes.yaml": "file",
+  "rules": "dir",
+  "rules/imported-persona.md": "file",
+  "skills": "dir",
+  "skills/stitch-frontend": "dir",
+  "skills/stitch-frontend/SKILL.md": "file",
+  "skills/stitch-frontend/run.sh": "file",
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file"
  }
 }
