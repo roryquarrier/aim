@@ -144,6 +144,48 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
         click.echo(f"imported {bundle_path} -> {home}" + (f" (backup: {bak})" if bak else ""))
 
 
+@main.command("restore-backup")
+@click.argument("backup_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--home", "home_dir", default=None, type=click.Path(),
+              help="Target home (default: infer from backup dir name '<name>.aimbak.<ts>')")
+def restore_backup(backup_dir, home_dir):
+    """Restore a home from an .aimbak snapshot made before an import.
+
+    Refuses if the target home is missing (nothing to swap) or a harness
+    process appears to be running.
+    """
+    from pathlib import Path
+    import re
+    import shutil
+    bdir = Path(backup_dir)
+    m = re.fullmatch(r"(.+)\.aimbak\.\d+", bdir.name)
+    target = Path(home_dir) if home_dir else (bdir.parent / m.group(1) if m else None)
+    if target is None:
+        click.echo("error: cannot infer target home from backup name; pass --home", err=True)
+        sys.exit(1)
+    if harness_name_of_home(target) and harness_running(harness_name_of_home(target)):
+        click.echo("error: harness process appears to be running; stop it first", err=True)
+        sys.exit(5)
+    tmp_old = target.parent / f".{target.name}.aimold.restore.{os.getpid()}"
+    if target.exists():
+        target.rename(tmp_old)
+    shutil.copytree(bdir, target, symlinks=True, ignore_dangling_symlinks=True)
+    if tmp_old.exists():
+        shutil.rmtree(tmp_old, ignore_errors=True)
+    click.echo(f"restored {bdir} -> {target}")
+
+
+def harness_name_of_home(home: Path):
+    from aim.adapters.base import all_adapters
+    for adapter in all_adapters():
+        try:
+            if adapter.default_home().resolve() == home.resolve():
+                return adapter.name
+        except Exception:
+            continue
+    return None
+
+
 @main.command("plan")
 @click.argument("bundle_path", type=click.Path(exists=True))
 @click.option("--harness", "harness_name", required=True)

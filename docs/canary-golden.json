@@ -1,0 +1,20 @@
+{
+ "buzz": {
+  "unsupported": "dir",
+  "unsupported/jobs.json": "file",
+  "workflows": "dir"
+ },
+ "claude-code": {},
+ "codex": {},
+ "deepseek-harness": {},
+ "goose": {},
+ "grok": {},
+ "openclaw": {},
+ "opencode": {
+  "agents": "dir"
+ },
+ "roo": {
+  "modes": "dir",
+  "modes/custom_modes.yaml": "file"
+ }
+}

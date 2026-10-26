@@ -636,3 +636,31 @@ class TestAgeInterop:
                            env={**os.environ, "AGE_PASSPHRASE_IS": "x"})  # age needs tty; use -i script fallback
         # age can't take passphrase via stdin without tty; do reverse: age encrypts, we decrypt
         # (handled in live spotcheck script with pty). Here verify our file parses with rage-compatible libs if present.
+
+
+class TestBackupRestore:
+    def test_import_makes_backup_and_restore_backs_it_out(self, tmp_path):
+        import subprocess, sys, os
+        from click.testing import CliRunner
+        from aim import cli as aim_cli
+        # fake claude-code home
+        home = tmp_path / "claude-home"
+        (home / ".claude").mkdir(parents=True)
+        (home / ".claude" / "CLAUDE.md").write_text("old persona")
+        # bundle from fixtures
+        import pathlib
+        fx = pathlib.Path(__file__).parent.parent / "fixtures" / "hermes"
+        runner = CliRunner()
+        r = runner.invoke(aim_cli.main, ["export", "--harness", "hermes", "--home", str(fx),
+                                         "-o", str(tmp_path / "b.aim")], input="pw\npw\n")
+        assert r.exit_code == 0, r.output
+        r = runner.invoke(aim_cli.main, ["import", str(tmp_path / "b.aim"),
+                                         "--harness", "claude-code", "--home", str(home)],
+                          input="pw\n", env={**os.environ, "AIM_PASSPHRASE": "pw"})
+        assert r.exit_code == 0, r.output
+        baks = list(tmp_path.glob("claude-home.aimbak.*"))
+        assert len(baks) == 1, "import must snapshot the old home"
+        assert (home / ".claude" / "CLAUDE.md").exists()
+        r = runner.invoke(aim_cli.main, ["restore-backup", str(baks[0])])
+        assert r.exit_code == 0, r.output
+        assert (home / ".claude" / "CLAUDE.md").read_text() == "old persona"
