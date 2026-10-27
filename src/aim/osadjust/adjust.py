@@ -86,7 +86,7 @@ def snapshot_home(home: Path) -> Path | None:
     if not home.exists():
         return None
     import time
-    bak = home.parent / f"{home.name}.aimbak.{int(time.time())}"
+    bak = home.parent / f"{home.name}.aimbak.{int(time.time())}.{os.getpid()}"
     shutil.copytree(home.resolve() if home.is_symlink() else home, bak, symlinks=True, ignore_dangling_symlinks=True)
     for root, dirs, files in os.walk(bak):
         for d in dirs:
@@ -109,6 +109,14 @@ def transactional_import(home: Path, stage_fn, dry_run: bool = False, externals:
     home.parent.mkdir(parents=True, exist_ok=True)
     bak = None
     staging = home.parent / f".{home.name}.aimstage.{os.getpid()}"
+    # pre-stage backup of external files adapters may clobber (~/.claude.json, ~/.agents)
+    ext_bak_root = home.parent / f".{home.name}.aimextbak.{os.getpid()}"
+    for rel in externals:
+        src = home.parent / rel
+        if src.exists():
+            dst = ext_bak_root / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            (shutil.copytree if src.is_dir() else shutil.copy2)(src, dst)
     tmp_old = home.parent / f".{home.name}.aimold.{os.getpid()}"
     try:
         if staging.exists():
@@ -121,33 +129,28 @@ def transactional_import(home: Path, stage_fn, dry_run: bool = False, externals:
             staging.mkdir()
         stage_fn(staging)
         bak = snapshot_home(home)
-        # backup files adapters write OUTSIDE the home (e.g. ~/.claude.json, ~/.agents)
-        # so a failed import can restore them (audit CRITICAL #2)
-        ext_bak = bak / "_aim_externals" if bak else None
-        if ext_bak is not None:
-            for rel in externals:
-                src = home.parent / rel
-                if src.exists():
-                    dst = ext_bak / rel
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    (shutil.copytree if src.is_dir() else shutil.copy2)(src, dst)
         if home.exists():
             home.rename(tmp_old)
             staging.rename(home)
             shutil.rmtree(tmp_old, ignore_errors=True)
         else:
             staging.rename(home)
+        if ext_bak_root.is_dir() and bak is not None:
+            shutil.move(str(ext_bak_root), str(bak / "_aim_externals"))
+        elif ext_bak_root.is_dir():
+            shutil.move(str(ext_bak_root), str(home.parent / f"{home.name}.aimextbak"))
         return bak
     except BaseException:
         # rollback: put the old home back, drop the half-staged copy
         shutil.rmtree(staging, ignore_errors=True)
         if tmp_old.exists() and not home.exists():
             tmp_old.rename(home)
-        # restore externals clobbered during staging
-        if bak is not None and (bak / "_aim_externals").is_dir():
-            for src in (bak / "_aim_externals").iterdir():
+        # restore externals clobbered during staging (from the PRE-stage copy)
+        if ext_bak_root.is_dir():
+            for src in ext_bak_root.iterdir():
                 dst = home.parent / src.name
                 if dst.exists():
                     shutil.rmtree(dst, ignore_errors=True) if dst.is_dir() else dst.unlink()
                 shutil.copytree(src, dst, symlinks=True) if src.is_dir() else shutil.copy2(src, dst)
+        shutil.rmtree(ext_bak_root, ignore_errors=True)
         raise

@@ -76,11 +76,12 @@ def scan_bytes(data: bytes, path_hint: str = "", result: "RedactionResult | None
     if result is None:
         result = RedactionResult()
     namer = _Namer(result)
-    for v, ph in result.redacted.items():  # seed namer so identical values reuse placeholders
+    for ph, v in result.redacted.items():  # seed namer so identical values reuse placeholders
         namer.by_value[v] = ph
         base = ph[len("${secret:"):-1]
-        base = re.sub(r"_\d+$", "", base)
-        namer.base_count[base] = namer.base_count.get(base, 0) + 1
+        m = re.match(r"^(.*)_(\d+)$", base)
+        stem, n = (m.group(1), int(m.group(2))) if m else (base, 0)
+        namer.base_count[stem] = max(namer.base_count.get(stem, 0), n + 1)
 
     # Pass 1: named high-confidence patterns. Patterns WITH a capture group keep
     # the preceding key-name text; only the LAST group is redacted.

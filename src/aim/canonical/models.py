@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 CIF_SCHEMA_VERSION = 1
 
@@ -36,6 +36,7 @@ class Document(BaseModel):
 
 
 class Skill(BaseModel):
+    model_config = ConfigDict(ser_json_bytes="base64", val_json_bytes="base64")
     name: str
     skill_md: str  # verbatim SKILL.md content
     scripts: dict[str, bytes] = Field(default_factory=dict)  # relpath -> bytes

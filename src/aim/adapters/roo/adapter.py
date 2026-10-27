@@ -186,7 +186,16 @@ class RooAdapter(Adapter):
 def _safe_yaml_load(text: str):
     """yaml.safe_load with alias-expansion ('billion laughs') guard."""
     import yaml
+    from yaml.events import AliasEvent
+
     class _L(yaml.SafeLoader):
-        pass
-    _L.max_aliases = 100
+        _alias_n = 0
+
+        def compose_node(self, parent, index):
+            if self.check_event(AliasEvent):
+                _L._alias_n += 1
+                if _L._alias_n > 100:
+                    raise ValueError("too many YAML aliases (alias bomb?)")
+            return super().compose_node(parent, index)
+
     return yaml.load(text, Loader=_L)

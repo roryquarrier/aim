@@ -109,6 +109,12 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
         if d.kind.value == "persona":
             continue
         rel = memory_rel_fn(d)
+        _low = rel.lower()
+        if d.kind != Kind.persona and not (_low.endswith(".md") or _low.endswith(".txt")):
+            raise ValueError(f"document path must be .md/.txt (not config): {rel!r}")
+        if _low in {"settings.json", "config.toml", "config.yaml", "config.json",
+                    ".credentials.yaml", "credentials.json", ".claude.json"} or rel == persona_rel:
+            raise ValueError(f"document path clashes with harness config/persona: {rel!r}")
         if not dry_run:
             p = _safe_relpath(home, rel, "document")
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -119,7 +125,7 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
         if not _re2.fullmatch(r"[A-Za-z0-9._-]+", s.name) or s.name in (".", ".."):
             raise ValueError(f"invalid skill name rejected: {s.name!r}")
         sdir = _safe_relpath(home / "skills", s.name, "skill name")
-        if sdir.parent != (home / "skills"):
+        if sdir.parent != (home / "skills").resolve():
             raise ValueError(f"skill name escapes skills/: {s.name!r}")
         if not dry_run:
             sdir.mkdir(parents=True, exist_ok=True)
@@ -128,7 +134,7 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
                 f = _safe_relpath(sdir, rel, "skill script")
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_bytes(blob)
-                f.chmod(0o755)
+                f.chmod(0o700)
         gaps.append(GapItem(item=f"skill:{s.name}", policy="native"))
     for j in state.jobs:
         gaps.append(GapItem(item=f"job:{j.name}", policy="park",

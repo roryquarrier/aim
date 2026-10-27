@@ -77,7 +77,16 @@ def export(harness_name, home_dir, output, with_secrets, passphrase, allow_unred
         passphrase = passphrase or os.environ.get("AIM_PASSPHRASE")
         if not passphrase:
             passphrase = click.prompt("Vault passphrase", hide_input=True, confirmation_prompt=True)
-        vault = _json.dumps(redaction.redacted, indent=1).encode()
+        import hashlib as _hl
+        def _unescape(s: str) -> str:
+            try:
+                u = _json.loads(f'"{s}"')
+                return u if isinstance(u, str) else s
+            except Exception:
+                return s
+        _v = {ph: _unescape(v) for ph, v in redaction.redacted.items()}
+        _v["_aim_state_sha256"] = _hl.sha256(clean).hexdigest()
+        vault = _json.dumps(_v, indent=1).encode()
         writer.add_bytes("secrets/secrets.age", secrets_mod.encrypt(vault, passphrase), mode=0o600)
         click.echo(f"secrets vault: {len(redaction.redacted)} value(s) encrypted into secrets/secrets.age")
     out = writer.write(state, adapter_meta={"name": adapter.name, "version": "0.1.0"})
@@ -124,11 +133,25 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
             return _json.dumps(s)[1:-1]
 
         raw = reader.read("state.json").decode("utf-8", "replace")
-        for ph, val in vault.items():
-            # vault values are already in JSON-escaped form (they came from the
-            # serialized state text) — substitute the escaped placeholder 1:1
-            raw = raw.replace(json_escape(ph), val)
-        raw_state = raw
+        import hashlib as _hl
+        state_sha = vault.pop("_aim_state_sha256", None)
+        if state_sha is None or _hl.sha256(raw.encode("utf-8", "replace")).hexdigest() != state_sha:
+            click.echo("error: vault does not match this bundle's state.json "
+                       "(tampered or mismatched bundle?) — refusing to fill secrets", err=True)
+            sys.exit(6)
+        # fill placeholders by walking the parsed object — raw values, no text splicing
+        _obj = _json.loads(raw)
+        def _fill(o):
+            if isinstance(o, str):
+                for _ph, _val in vault.items():
+                    o = o.replace(_ph, _val)
+                return o
+            if isinstance(o, list):
+                return [_fill(x) for x in o]
+            if isinstance(o, dict):
+                return {k: _fill(v) for k, v in o.items()}
+            return o
+        raw_state = _json.dumps(_fill(_obj))
         click.echo("secrets restored: placeholders filled from vault")
     state = reader.state(text_override=raw_state)
     # scripts are raw bytes (pydantic-decoded), so fill script placeholders directly
@@ -175,7 +198,7 @@ def restore_backup(backup_dir, home_dir):
     import re
     import shutil
     bdir = Path(backup_dir)
-    m = re.fullmatch(r"(.+)\.aimbak\.\d+", bdir.name)
+    m = re.fullmatch(r"(.+)\.aimbak\.[0-9.]+", bdir.name)
     target = Path(home_dir) if home_dir else (bdir.parent / m.group(1) if m else None)
     if target is None:
         click.echo("error: cannot infer target home from backup name; pass --home", err=True)
@@ -184,16 +207,30 @@ def restore_backup(backup_dir, home_dir):
         click.echo("error: harness process appears to be running; stop it first", err=True)
         sys.exit(5)
     tmp_old = target.parent / f".{target.name}.aimold.restore.{os.getpid()}"
-    if target.exists():
-        target.rename(tmp_old)
+    tmp_new = target.parent / f".{target.name}.aimnew.restore.{os.getpid()}"
     try:
-        shutil.copytree(bdir, target, symlinks=True, ignore_dangling_symlinks=True)
+        if tmp_new.exists():
+            shutil.rmtree(tmp_new)
+        shutil.copytree(bdir, tmp_new, symlinks=True, ignore_dangling_symlinks=True,
+                        ignore=shutil.ignore_patterns("_aim_externals"))
+        if target.exists():
+            target.rename(tmp_old)
+        tmp_new.rename(target)
     except BaseException:
-        if not target.exists() and tmp_old.exists():
-            tmp_old.rename(target)  # put the original back
+        shutil.rmtree(tmp_new, ignore_errors=True)
+        if tmp_old.exists() and not target.exists():
+            tmp_old.rename(target)  # original home always goes back on failure
         raise
     if tmp_old.exists():
         shutil.rmtree(tmp_old, ignore_errors=True)
+    # external files (e.g. ~/.claude.json, ~/.agents) backed up beside the home
+    ext = bdir / "_aim_externals"
+    if ext.is_dir():
+        for src in ext.iterdir():
+            dst = target.parent / src.name
+            if dst.exists():
+                shutil.rmtree(dst, ignore_errors=True) if dst.is_dir() else dst.unlink()
+            shutil.copytree(src, dst, symlinks=True) if src.is_dir() else shutil.copy2(src, dst)
     click.echo(f"restored {bdir} -> {target}")
 
 
