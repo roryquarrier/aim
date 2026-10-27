@@ -56,8 +56,16 @@ def export(harness_name, home_dir, output, with_secrets, passphrase, allow_unred
         sys.exit(2)
     state = adapter.export(home)
     writer = bundle_mod.BundleWriter(output)
+    # scan skill script bytes FIRST (they serialize as base64 inside state.json,
+    # which the JSON scan cannot see) — shared namespace avoids placeholder collisions
+    from aim.redact import RedactionResult
+    redaction = RedactionResult()
+    for s in state.skills:
+        for rel in list(s.scripts):
+            sc, _ = scan_bytes(s.scripts[rel], result=redaction)
+            s.scripts[rel] = sc
     raw = state.model_dump_json(indent=2).encode()
-    clean, redaction = scan_bytes(raw)
+    clean, redaction = scan_bytes(raw, result=redaction)
     if redaction.count and not allow_unredacted and not with_secrets:
         click.echo(f"error: {redaction.count} secret-like span(s) found in exported state; "
                    f"re-run with --allow-unredacted or --with-secrets", err=True)
@@ -123,6 +131,14 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
         raw_state = raw
         click.echo("secrets restored: placeholders filled from vault")
     state = reader.state(text_override=raw_state)
+    # scripts are raw bytes (pydantic-decoded), so fill script placeholders directly
+    if raw_state is not None and "secrets/secrets.age" in reader.manifest().hashes:
+        for _s in state.skills:
+            for _rel in list(_s.scripts):
+                _b = _s.scripts[_rel]
+                for _ph, _val in vault.items():
+                    _b = _b.replace(_ph.encode(), _val.encode())
+                _s.scripts[_rel] = _b
     mapping = path_map(list(maps))
     if mapping:
         n = 0
@@ -136,7 +152,8 @@ def import_(bundle_path, harness_name, home_dir, maps, passphrase, dry_run, forc
     def stage(target: Path):
         adapter.import_(state, target, dry_run=dry_run)
 
-    bak = transactional_import(home, stage, dry_run=dry_run)
+    bak = transactional_import(home, stage, dry_run=dry_run,
+                                externals=getattr(adapter, "EXTERNAL_PATHS", ()))
     reader.close()
     if dry_run:
         click.echo("dry-run ok: no files written")
@@ -169,7 +186,12 @@ def restore_backup(backup_dir, home_dir):
     tmp_old = target.parent / f".{target.name}.aimold.restore.{os.getpid()}"
     if target.exists():
         target.rename(tmp_old)
-    shutil.copytree(bdir, target, symlinks=True, ignore_dangling_symlinks=True)
+    try:
+        shutil.copytree(bdir, target, symlinks=True, ignore_dangling_symlinks=True)
+    except BaseException:
+        if not target.exists() and tmp_old.exists():
+            tmp_old.rename(target)  # put the original back
+        raise
     if tmp_old.exists():
         shutil.rmtree(tmp_old, ignore_errors=True)
     click.echo(f"restored {bdir} -> {target}")

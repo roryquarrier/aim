@@ -68,10 +68,19 @@ class _Namer:
         return ph.encode()
 
 
-def scan_bytes(data: bytes, path_hint: str = "") -> tuple[bytes, RedactionResult]:
-    """Replace secret-looking spans with ${secret:NAME} placeholders. Returns (clean, result)."""
-    result = RedactionResult()
+def scan_bytes(data: bytes, path_hint: str = "", result: "RedactionResult | None" = None) -> tuple[bytes, RedactionResult]:
+    """Replace secret-looking spans with ${secret:NAME} placeholders. Returns (clean, result).
+
+    Pass `result` to share a placeholder namespace across multiple calls (e.g. per-file
+    scans whose values must not collide) — placeholders are added to it in place."""
+    if result is None:
+        result = RedactionResult()
     namer = _Namer(result)
+    for v, ph in result.redacted.items():  # seed namer so identical values reuse placeholders
+        namer.by_value[v] = ph
+        base = ph[len("${secret:"):-1]
+        base = re.sub(r"_\d+$", "", base)
+        namer.base_count[base] = namer.base_count.get(base, 0) + 1
 
     # Pass 1: named high-confidence patterns. Patterns WITH a capture group keep
     # the preceding key-name text; only the LAST group is redacted.

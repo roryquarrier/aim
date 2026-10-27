@@ -28,7 +28,7 @@ def read_docs(home: Path, harness: str, persona_paths: list[str], memory_globs: 
     idx = 0
     for rel in persona_paths:
         p = home / rel
-        if p.is_file():
+        if p.is_file() and not p.is_symlink():
             docs.append(Document(
                 id=f"doc-{idx}", path=rel, scope=Scope.user,
                 kind=Kind.persona, content=p.read_text("utf-8", "replace"),
@@ -81,6 +81,8 @@ def _safe_relpath(home: Path, rel: str, what: str) -> Path:
     scheme-like names, trailing dots/spaces, and anything escaping home."""
     if not rel or "\x00" in rel:
         raise ValueError(f"invalid {what} path: {rel!r}")
+    if ":" in rel or "\\" in rel:
+        raise ValueError(f"colon/backslash in {what} path rejected: {rel!r}")
     if rel != rel.rstrip(". "):
         raise ValueError(f"trailing dot/space in {what} path: {rel!r}")
     if re.match(r"^[A-Za-z]:", rel) or rel.startswith(("/", "\\", "~")) or "://" in rel or rel.startswith("//") or ":" in rel.split("/")[0].split("\\")[0]:
@@ -114,9 +116,11 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
         gaps.append(GapItem(item=f"{d.kind.value}:{rel}", policy="native"))
     for s in state.skills:
         import re as _re2
-        if not _re2.fullmatch(r"[A-Za-z0-9._-]+", s.name):
+        if not _re2.fullmatch(r"[A-Za-z0-9._-]+", s.name) or s.name in (".", ".."):
             raise ValueError(f"invalid skill name rejected: {s.name!r}")
-        sdir = home / "skills" / s.name
+        sdir = _safe_relpath(home / "skills", s.name, "skill name")
+        if sdir.parent != (home / "skills"):
+            raise ValueError(f"skill name escapes skills/: {s.name!r}")
         if not dry_run:
             sdir.mkdir(parents=True, exist_ok=True)
             (sdir / "SKILL.md").write_text(s.skill_md, "utf-8")

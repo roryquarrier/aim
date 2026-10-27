@@ -69,7 +69,7 @@ class RooAdapter(Adapter):
         est = self._editor_storage()
         if est and (est / "custom_modes.yaml").is_file():
             try:
-                modes = (yaml.safe_load((est / "custom_modes.yaml").read_text("utf-8")) or {}).get("customModes", [])
+                modes = (_safe_yaml_load((est / "custom_modes.yaml").read_text("utf-8")) or {}).get("customModes", [])
             except Exception:
                 modes = []
         # persona: defaultMode from cli-settings, else first custom mode, else builtin 'code'
@@ -162,7 +162,7 @@ class RooAdapter(Adapter):
             for o in others:
                 try:
                     body = o.content.split("---\n")[1] if o.content.startswith("---\n") else ""
-                    parsed = yaml.safe_load(body) if body else {}
+                    parsed = _safe_yaml_load(body) if body else {}
                     if isinstance(parsed, dict):
                         cm.append(parsed)
                 except Exception:
@@ -182,3 +182,11 @@ class RooAdapter(Adapter):
                    "reads editor globalStorage today; copy the file there if the extension "
                    "doesn't pick it up (open issue RooCodeInc#10750)."))
         return gaps
+
+def _safe_yaml_load(text: str):
+    """yaml.safe_load with alias-expansion ('billion laughs') guard."""
+    import yaml
+    class _L(yaml.SafeLoader):
+        pass
+    _L.max_aliases = 100
+    return yaml.load(text, Loader=_L)

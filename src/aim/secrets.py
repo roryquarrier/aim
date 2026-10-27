@@ -165,6 +165,8 @@ def decrypt(blob: bytes, passphrase: str) -> bytes:
         raise ValueError(f"unsupported stanza: {lines[1][:40]!r}")
     salt = _unb64(stanza[2])
     work = int(stanza[3])
+    if not 1 <= work <= 18:
+        raise ValueError(f"invalid scrypt work factor: {work}")
     # body lines: everything until the "--- " MAC line, joined (may include a final empty line)
     body_b64 = b""
     i = 2

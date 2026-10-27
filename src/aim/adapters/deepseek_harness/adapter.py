@@ -20,6 +20,7 @@ from aim.canonical.models import AgentState, Capability, GapItem, Kind, Scope, D
 
 @register
 class DeepseekHarnessAdapter(Adapter):
+    EXTERNAL_PATHS = (".agents",)  # ~/.agents standard dir written during import
     name = "deepseek-harness"
     capabilities = {Capability.skills_scripts, Capability.persona_md}
 
@@ -69,7 +70,9 @@ class DeepseekHarnessAdapter(Adapter):
             agents_skills = home.parent / ".agents" / "skills"
             agents_skills.mkdir(parents=True, exist_ok=True)
             for s in state.skills:
-                d = agents_skills / s.name
+                if s.name in (".", ".."):
+                    raise ValueError(f"invalid skill name rejected: {s.name!r}")
+                d = _safe_relpath(agents_skills, s.name, "skill name")
                 d.mkdir(parents=True, exist_ok=True)
                 (d / "SKILL.md").write_text(s.skill_md, "utf-8")
                 for rel, blob in s.scripts.items():

@@ -653,7 +653,7 @@ class TestBackupRestore:
                                          "-o", str(tmp_path / "b.aim")], input="pw\npw\n")
         assert r.exit_code == 0, r.output
         r = runner.invoke(aim_cli.main, ["import", str(tmp_path / "b.aim"),
-                                         "--harness", "claude-code", "--home", str(home)],
+                                         "--harness", "claude-code", "--home", str(home), "--force"],
                           input="pw\n", env={**os.environ, "AIM_PASSPHRASE": "pw"})
         assert r.exit_code == 0, r.output
         baks = list(tmp_path.glob("claude-home.aimbak.*"))
@@ -662,3 +662,42 @@ class TestBackupRestore:
         r = runner.invoke(aim_cli.main, ["restore-backup", str(baks[0])])
         assert r.exit_code == 0, r.output
         assert (home / ".claude" / "CLAUDE.md").read_text() == "old persona"
+
+
+class TestAuditFixes:
+    def test_dotdot_skill_name_rejected(self, tmp_path):
+        from aim.adapters.common import write_common_import
+        from aim.canonical.models import AgentState, Skill
+        state = AgentState(source_os="linux", source_harness="test")
+        s = Skill(name="..", skill_md="# evil")
+        state.skills.append(s)
+        try:
+            write_common_import(state, tmp_path, "AGENTS.md",
+                                lambda d: d.path, dry_run=False)
+            assert False, "must reject '..' skill name"
+        except ValueError:
+            pass
+        assert not (tmp_path / "SKILL.md").exists(), "must not escape skills/"
+
+    def test_skill_script_secrets_redacted_into_vault(self, tmp_path):
+        from click.testing import CliRunner
+        from aim import cli as aim_cli
+        home = make_hermes_home(tmp_path)
+        # plant an API key in a skill script
+        sk = home / "skills" / "stitch-frontend" / "run.sh"
+        sk.write_bytes(b"#!/bin/bash\nexport OPENAI_API_KEY=sk-proj-abc123def456ghi789xyz\n")
+        pkg = tmp_path / "s.aim"
+        r = CliRunner().invoke(aim_cli.main, ["export", "--harness", "hermes", "--home", str(home),
+                                              "-o", str(pkg), "--with-secrets"],
+                               input="pw\npw\n")
+        assert r.exit_code == 0, r.output
+        blob = pkg.read_bytes()
+        assert b"sk-proj-abc123def456ghi789xyz" not in blob, "secret leaked into bundle"
+        # import restores it into the script bytes
+        tgt = tmp_path / "t"
+        r = CliRunner().invoke(aim_cli.main, ["import", str(pkg), "--harness", "hermes",
+                                              "--home", str(tgt), "--force"],
+                               input="pw\n", env={"AIM_PASSPHRASE": "pw"})
+        assert r.exit_code == 0, r.output
+        restored = (tgt / "skills" / "stitch-frontend" / "run.sh").read_bytes()
+        assert b"sk-proj-abc123def456ghi789xyz" in restored, "secret not restored into script"

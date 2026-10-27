@@ -77,10 +77,11 @@ class BuzzAdapter(Adapter):
             wf = home / "workflows"
             wf.mkdir(parents=True, exist_ok=True)
             for i, j in enumerate(state.jobs):
-                (wf / f"imported-schedule-{i}.yaml").write_text(
+                body = (
                     f"trigger: schedule\nschedule: {json.dumps(j.model_dump().get('schedule', j.model_dump()))}\n"
-                    f"action: notify\nnote: migrated by aim from {j.model_dump().get('name', 'job ' + str(i))}\n",
-                    "utf-8")
+                    "action: notify\nnote: migrated by aim from "
+                    + json.dumps(j.model_dump().get('name', 'job ' + str(i))) + "\n")
+                (wf / f"imported-schedule-{i}.yaml").write_text(body, "utf-8")
             u = home / "unsupported"
             u.mkdir(parents=True, exist_ok=True)
             (u / "jobs.json").write_text(json.dumps([j.model_dump() for j in state.jobs], indent=2), "utf-8")
@@ -93,6 +94,7 @@ class BuzzAdapter(Adapter):
 
 
 def _load_workflows(wf: Path):
+    import json
     import yaml
     from aim.canonical.models import Job
     jobs: list[Job] = []
@@ -101,7 +103,7 @@ def _load_workflows(wf: Path):
         return jobs, cfg
     for f in sorted(wf.glob("*.yaml")) + sorted(wf.glob("*.yml")):
         try:
-            data = yaml.safe_load(f.read_text("utf-8")) or {}
+            data = _safe_yaml_load(f.read_text("utf-8")) or {}
         except Exception:
             continue
         trig = str(data.get("trigger", "")).lower()
@@ -112,3 +114,11 @@ def _load_workflows(wf: Path):
         else:
             cfg.append(ConfigEntry(key=f"workflows.{name}", value=data))
     return jobs, cfg
+
+def _safe_yaml_load(text: str):
+    """yaml.safe_load with alias-expansion ('billion laughs') guard."""
+    import yaml
+    class _L(yaml.SafeLoader):
+        pass
+    _L.max_aliases = 100
+    return yaml.load(text, Loader=_L)

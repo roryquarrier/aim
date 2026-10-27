@@ -13,6 +13,7 @@ from aim.canonical.models import (
 
 @register
 class ClaudeCodeAdapter(Adapter):
+    EXTERNAL_PATHS = (".claude.json",)  # files written in home.parent during import
     name = "claude-code"
     capabilities = {Capability.mcp_stdio, Capability.skills_scripts, Capability.persona_md}
 

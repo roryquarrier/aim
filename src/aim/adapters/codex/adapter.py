@@ -19,6 +19,7 @@ from aim.canonical.models import AgentState, Capability, GapItem, Kind
 
 @register
 class CodexAdapter(Adapter):
+    EXTERNAL_PATHS = (".agents",)  # ~/.agents standard dir written during import
     name = "codex"
     capabilities = {Capability.skills_scripts, Capability.persona_md}
 
@@ -58,16 +59,18 @@ class CodexAdapter(Adapter):
         )
         # skills also go to the .agents standard dir so Codex finds them either way
         if not dry_run:
+            from aim.adapters.common import _safe_relpath
             agents_skills = home.parent / ".agents" / "skills"
             agents_skills.mkdir(parents=True, exist_ok=True)
             for s in state.skills:
-                d = agents_skills / s.name
+                if s.name in (".", ".."):
+                    raise ValueError(f"invalid skill name rejected: {s.name!r}")
+                d = _safe_relpath(agents_skills, s.name, "skill name")
                 d.mkdir(parents=True, exist_ok=True)
                 (d / "SKILL.md").write_text(s.skill_md, "utf-8")
                 import os as _os
                 import re as _re
                 for rel, blob in s.scripts.items():
-                    from aim.adapters.common import _safe_relpath
                     f = _safe_relpath(d, rel, "skill script")
                     f.parent.mkdir(parents=True, exist_ok=True)
                     f.write_bytes(blob)
@@ -87,7 +90,7 @@ def _load_one_skill(d: Path, harness: str):
     from aim.canonical.models import Skill
     scripts: dict[str, bytes] = {}
     for f in sorted(d.rglob("*")):
-        if f.is_file() and f.name != "SKILL.md" and "__pycache__" not in f.parts and not f.name.startswith("."):
+        if f.is_file() and not f.is_symlink() and f.name != "SKILL.md" and "__pycache__" not in f.parts and not f.name.startswith("."):
             if f.stat().st_size < 512 * 1024:
                 scripts[str(f.relative_to(d))] = f.read_bytes()
     return Skill(name=d.name, skill_md=(d / "SKILL.md").read_text("utf-8", "replace"), scripts=scripts)

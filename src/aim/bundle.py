@@ -19,10 +19,12 @@ def _sha256(data: bytes) -> str:
 
 def _safe_member(name: str) -> bool:
     """Reject zip-slip, absolute paths, and Windows-reserved device names."""
+    if "\\" in name or ":" in name:
+        return False  # backslash path separators / drive letters / ADS (Windows zip-slip)
     p = PurePosixPath(name)
     if p.is_absolute() or ".." in p.parts:
         return False
-    reserved = {"con", "prn", "aux", "nul", "com1", "lpt1"}
+    reserved = {"con", "prn", "aux", "nul"} | {f"com{i}" for i in range(1, 10)} | {f"lpt{i}" for i in range(1, 10)}
     return not any(part.split(".")[0].lower() in reserved for part in p.parts)
 
 
@@ -50,6 +52,7 @@ class BundleWriter:
         for relpath, data in sorted(self._files.items()):
             if relpath != "manifest.json":
                 manifest.hashes[relpath] = _sha256(data)
+        manifest.has_secrets = "secrets/secrets.age" in self._files
         manifest_data = json.dumps(json.loads(manifest.model_dump_json()), indent=2).encode()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(self.path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -68,11 +71,20 @@ class BundleReader:
     def __init__(self, path: Path):
         self.path = Path(path)
         self._zf = zipfile.ZipFile(self.path)
+        total = sum(i.file_size for i in self._zf.infolist())
+        if total > self.MAX_TOTAL_BYTES:
+            raise ValueError(f"bundle too large (zip bomb?): {total}B uncompressed")
 
     def manifest(self) -> Manifest:
         return Manifest.model_validate_json(self.read("manifest.json"))
 
+    MAX_MEMBER_BYTES = 512 * 1024 * 1024   # 512 MiB per member (zip-bomb guard)
+    MAX_TOTAL_BYTES = 1024 * 1024 * 1024  # 1 GiB across the bundle
+
     def read(self, relpath: str) -> bytes:
+        zi = self._zf.getinfo(relpath)
+        if zi.file_size > self.MAX_MEMBER_BYTES:
+            raise ValueError(f"bundle member too large (zip bomb?): {relpath} = {zi.file_size}B")
         return self._zf.read(relpath)
 
     def mode(self, relpath: str) -> int:

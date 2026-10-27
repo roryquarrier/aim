@@ -64,7 +64,7 @@ def harness_running(harness: str) -> bool:
     probes = {
         "hermes": ["hermes"],
         "openclaw": ["openclaw", "openclaude"],
-        "claude-code": [],
+        "claude-code": ["claude", "claude-code"],
     }.get(harness, [])
     me = Path(sys.argv[0]).name
     try:
@@ -72,8 +72,9 @@ def harness_running(harness: str) -> bool:
     except Exception:
         return False  # can't check (e.g. Windows without ps) — don't block
     for line in out.splitlines():
-        if not line.strip() or f" {me}" in line or line.startswith("ps -eo"):
-            continue
+        low = line.lower()
+        if not line.strip() or f" {me}" in line or line.startswith("ps -eo") or "aim" in low:
+            continue  # skip self + any aim invocation (its --harness arg is not a live harness)
         for probe in probes:
             if probe in line and "aim" not in line:
                 return True
@@ -100,12 +101,13 @@ def snapshot_home(home: Path) -> Path | None:
     return bak
 
 
-def transactional_import(home: Path, stage_fn, dry_run: bool = False) -> Path | None:
+def transactional_import(home: Path, stage_fn, dry_run: bool = False, externals: tuple = ()) -> Path | None:
     """Stage into temp dir next to target, then atomic rename swap (SPEC §3)."""
     if dry_run:
         stage_fn(home)  # adapters in dry-run write nothing
         return None
     home.parent.mkdir(parents=True, exist_ok=True)
+    bak = None
     staging = home.parent / f".{home.name}.aimstage.{os.getpid()}"
     tmp_old = home.parent / f".{home.name}.aimold.{os.getpid()}"
     try:
@@ -119,6 +121,16 @@ def transactional_import(home: Path, stage_fn, dry_run: bool = False) -> Path | 
             staging.mkdir()
         stage_fn(staging)
         bak = snapshot_home(home)
+        # backup files adapters write OUTSIDE the home (e.g. ~/.claude.json, ~/.agents)
+        # so a failed import can restore them (audit CRITICAL #2)
+        ext_bak = bak / "_aim_externals" if bak else None
+        if ext_bak is not None:
+            for rel in externals:
+                src = home.parent / rel
+                if src.exists():
+                    dst = ext_bak / rel
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    (shutil.copytree if src.is_dir() else shutil.copy2)(src, dst)
         if home.exists():
             home.rename(tmp_old)
             staging.rename(home)
@@ -131,4 +143,11 @@ def transactional_import(home: Path, stage_fn, dry_run: bool = False) -> Path | 
         shutil.rmtree(staging, ignore_errors=True)
         if tmp_old.exists() and not home.exists():
             tmp_old.rename(home)
+        # restore externals clobbered during staging
+        if bak is not None and (bak / "_aim_externals").is_dir():
+            for src in (bak / "_aim_externals").iterdir():
+                dst = home.parent / src.name
+                if dst.exists():
+                    shutil.rmtree(dst, ignore_errors=True) if dst.is_dir() else dst.unlink()
+                shutil.copytree(src, dst, symlinks=True) if src.is_dir() else shutil.copy2(src, dst)
         raise
