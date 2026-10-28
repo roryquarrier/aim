@@ -34,6 +34,8 @@ class ClaudeCodeAdapter(Adapter):
             for memdir in sorted(projects.glob("*/memory")):
                 workspace_id = memdir.parent.name  # path-encoded cwd — re-keyed on import via --map
                 for f in sorted(memdir.glob("*.md")):
+                    if f.is_symlink():
+                        continue
                     docs.append(Document(
                         id=f"doc-{idx}", path=str(f.relative_to(home)).replace("\\", "/"),
                         scope=Scope.workspace, workspace_id=workspace_id,

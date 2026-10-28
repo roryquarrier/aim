@@ -103,6 +103,8 @@ class RooAdapter(Adapter):
         rules = home / "rules"
         if rules.is_dir():
             for f in sorted(rules.glob("*.md")):
+                if f.is_symlink():
+                    continue
                 docs.append(Document(
                     id=f"doc-{idx}", path=f"rules/{f.name}", scope=Scope.user,
                     kind=Kind.memory, content=f.read_text("utf-8", "replace"), source_adapter=self.name))
@@ -110,6 +112,8 @@ class RooAdapter(Adapter):
         for d in sorted(home.glob("rules-*")):
             if d.is_dir():
                 for f in sorted(d.glob("*.md")):
+                    if f.is_symlink():
+                        continue
                     docs.append(Document(
                         id=f"doc-{idx}", path=(d.name + "/" + f.name), scope=Scope.user,
                         kind=Kind.profile, content=f.read_text("utf-8", "replace"), source_adapter=self.name))
@@ -118,6 +122,8 @@ class RooAdapter(Adapter):
         cmds = home / "commands"
         if cmds.is_dir():
             for f in sorted(cmds.glob("*.md")):
+                if f.is_symlink():
+                    continue
                 docs.append(Document(
                     id=f"doc-{idx}", path=f"commands/{f.name}", scope=Scope.user,
                     kind=Kind.raw, content=f.read_text("utf-8", "replace"), source_adapter=self.name))

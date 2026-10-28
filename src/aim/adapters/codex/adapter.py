@@ -90,9 +90,11 @@ def _load_one_skill(d: Path, harness: str):
     from aim.canonical.models import Skill
     scripts: dict[str, bytes] = {}
     for f in sorted(d.rglob("*")):
-        if f.is_file() and not f.is_symlink() and f.name != "SKILL.md" and "__pycache__" not in f.parts and not f.name.startswith("."):
+        if (f.is_file() and not f.is_symlink() and f.name != "SKILL.md"
+                and "__pycache__" not in f.parts and ".git" not in f.parts
+                and not f.name.startswith(".")):
             if f.stat().st_size < 512 * 1024:
-                scripts[str(f.relative_to(d))] = f.read_bytes()
+                scripts[f.relative_to(d).as_posix()] = f.read_bytes()
     return Skill(name=d.name, skill_md=(d / "SKILL.md").read_text("utf-8", "replace"), scripts=scripts)
 
 

@@ -47,15 +47,22 @@ def path_map(args: list[str]) -> dict[str, str]:
 
 
 def remap_text(text: str, mapping: dict[str, str]) -> tuple[str, int]:
+    # single pass with alternation (longest first) + left AND right boundaries:
+    # a->b / b->a swaps no longer cascade, and /mnt/home/hal is not rewritten
+    pairs = sorted(((s.rstrip("/").rstrip("\\"), d.rstrip("/").rstrip("\\") or d) for s, d in mapping.items()
+                    if s and s.rstrip("/\\") != d.rstrip("/\\")), key=lambda kv: -len(kv[0]))
+    if not pairs:
+        return text, 0
+    alt = re.compile("|".join(rf"(?<![\w.-]){re.escape(s)}(?![\w.-])" for s, _ in pairs))
     n = 0
-    for src, dst in sorted(mapping.items(), key=lambda kv: -len(kv[0])):
-        if not src or src == dst or src not in text:
-            continue
-        # boundary-aware: src must be followed by a delimiter/end so /home/hal
-        # never rewrites /home/halberd
-        new_text = re.sub(re.escape(src) + r"(?![\w.-])", dst.replace("\\", "\\\\"), text)
-        n += len(re.findall(re.escape(src) + r"(?![\w.-])", text))
-        text = new_text
+    def sub(m: re.Match) -> str:
+        nonlocal n
+        n += 1
+        for s, d in pairs:
+            if m.group(0) == s:
+                return d.replace("\\", "\\\\")
+        return m.group(0)
+    text = alt.sub(sub, text)
     return text, n
 
 
@@ -101,8 +108,12 @@ def snapshot_home(home: Path) -> Path | None:
     return bak
 
 
-def transactional_import(home: Path, stage_fn, dry_run: bool = False, externals: tuple = ()) -> Path | None:
-    """Stage into temp dir next to target, then atomic rename swap (SPEC §3)."""
+def transactional_import(home_in: Path, stage_fn, dry_run: bool = False, externals: tuple = ()) -> Path | None:
+    """Stage into temp dir next to target, then atomic rename swap (SPEC §3).
+
+    If the home is a symlink (dotfiles setups), we stage/swap the RESOLVED
+    directory and leave the link untouched (audit opus #11)."""
+    home = Path(os.path.realpath(home_in)) if home_in.is_symlink() else home_in
     if dry_run:
         stage_fn(home)  # adapters in dry-run write nothing
         return None

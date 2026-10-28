@@ -753,3 +753,48 @@ class TestOpusAuditFixes:
         assert r.exit_code == 0, r.output
         got = (tgt / "skills" / "stitch-frontend" / "run.sh").read_bytes()
         assert pem.encode() in got, "multiline PEM must restore into script exactly"
+
+
+class TestOpusMediums:
+    def test_symlinked_memory_not_exported(self, tmp_path):
+        home = make_hermes_home(tmp_path)
+        secret = tmp_path / "secret.txt"
+        secret.write_text("TOPSECRET-CONTENT")
+        (home / "memories" / "leak.md").symlink_to(secret)
+        from click.testing import CliRunner
+        from aim import cli as aim_cli
+        r = CliRunner().invoke(aim_cli.main, ["export", "--harness", "hermes", "--home", str(home),
+                                              "-o", str(tmp_path / "s.aim")], input="n\nn\n")
+        assert r.exit_code == 0 or r.exit_code == 3, r.output
+        if r.exit_code == 0:
+            assert b"TOPSECRET-CONTENT" not in (tmp_path / "s.aim").read_bytes()
+
+    def test_nsec_xai_urlcred_redacted(self):
+        from aim.redact import scan_bytes
+        blob = (b"BUZZ_PRIVATE_KEY=nsec1abcdefghij0123456789qrstuv\n"
+                b"XAI_KEY=xai-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234\n"
+                b"DB=postgres://app:hunter2secret@db.example.com/x\n")
+        clean, res = scan_bytes(blob)
+        assert b"nsec1abcdefghij" not in clean
+        assert b"xai-ABCDEFGHIJ" not in clean
+        assert b"hunter2secret" not in clean
+        assert len(res.redacted) >= 3
+
+    def test_remap_swap_and_boundary(self):
+        from aim.osadjust.adjust import remap_text
+        # swap must not cascade; left boundary must hold
+        t, n = remap_text("/home/hal/docs and /Users/hal/x and /mnt/home/hal/y",
+                          {"/home/hal/": "/Users/hal/", "/Users/hal/": "/home/hal/"})
+        assert "/Users/hal/docs" in t and "/home/hal/x" in t
+        assert "/mnt/home/hal/y" == t.split()[-1]  # untouched
+
+    def test_symlinked_skill_md_replaced_not_followed(self, tmp_path):
+        from aim.adapters.common import write_nofollow
+        victim = tmp_path / "victim.txt"
+        victim.write_text("original")
+        ln = tmp_path / "SKILL.md"
+        ln.symlink_to(victim)
+        write_nofollow(ln, "# new skill", mode=0o600)
+        assert not ln.is_symlink()
+        assert victim.read_text() == "original"  # never wrote through the link
+        assert ln.read_text() == "# new skill"

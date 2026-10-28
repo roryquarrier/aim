@@ -38,6 +38,8 @@ class OpenCodeAdapter(Adapter):
             d = home / sub
             if d.is_dir():
                 for f in sorted(d.glob("*.md")):
+                    if f.is_symlink():
+                        continue
                     docs.append(_mk_doc(len(docs), str(f.relative_to(home)), kind,
                                         f.read_text("utf-8", "replace"), self.name))
         state.documents = docs

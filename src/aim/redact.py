@@ -22,12 +22,16 @@ PATTERNS: dict[str, re.Pattern] = {
     "AWS_SECRET_KEY": re.compile(rb"""(?i)(aws_secret_access_key)[\"'`\s:=]+([A-Za-z0-9/+=]{30,})"""),
     "JSON_WEB_TOKEN": re.compile(rb"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
     "PRIVATE_KEY_BLOCK": re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
+    "NOSTR_NSEC": re.compile(rb"\bnsec1[0-9a-z]{20,}\b"),
+    "XAI_KEY": re.compile(rb"\bxai-[A-Za-z0-9_-]{20,}\b"),
+    "HF_TOKEN": re.compile(rb"\bhf_[A-Za-z0-9]{30,}\b"),
+    "URL_CRED": re.compile(rb"([a-zA-Z][a-zA-Z0-9+.-]*://[^/@\s]+:)([^@\s]{4,})@"),
 }
 
 # Key-path assignments (yaml/toml/json/env): key looks secret AND value still intact.
 # Value class extended: specials + short passwords allowed (min 8) when key says password/secret.
 ASSIGN_RE = re.compile(
-    rb"""(?i)(?<![$:{])(token|api[_-]?key|secret|password|bearer)[\"'`\s:=]+([A-Za-z0-9_\-/+=!@#$%^&*.,;:]{16,})"""
+    rb"""(?i)(?<![$:{])(token|api[_-]?key|secret|password|bearer|private[_-]?key|[_-]key)[\"'`\s:=]+([A-Za-z0-9_\-/+=!@#$%^&*.,;:]{16,})"""
 )
 PASSWORD_RE = re.compile(
     rb"""(?i)(?<![$:{])(password|passwd)[\\"'`\s:=]+\\?["']?([^\s"'\\{}[\](),;]{8,64})(?=\s|$|["'})\],])"""

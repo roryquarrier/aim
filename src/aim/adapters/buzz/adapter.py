@@ -43,6 +43,8 @@ class BuzzAdapter(Adapter):
         first_persona = True
         if personas.is_dir():
             for f in sorted(personas.rglob("*.md")):
+                if f.is_symlink():
+                    continue
                 docs.append(Document(
                     id=f"doc-{idx}", path=str(f.relative_to(home)).replace("\\", "/"),
                     scope=Scope.user, kind=Kind.persona if first_persona else Kind.profile,
@@ -53,6 +55,8 @@ class BuzzAdapter(Adapter):
         agents = home / "agents"
         if agents.is_dir():
             for f in sorted(agents.glob("*.yaml")) + sorted(agents.glob("*.yml")):
+                if f.is_symlink():
+                    continue
                 docs.append(Document(
                     id=f"doc-{idx}", path=str(f.relative_to(home)).replace("\\", "/"),
                     scope=Scope.user, kind=Kind.profile,
@@ -81,10 +85,12 @@ class BuzzAdapter(Adapter):
                     f"trigger: schedule\nschedule: {json.dumps(j.model_dump().get('schedule', j.model_dump()))}\n"
                     "action: notify\nnote: migrated by aim from "
                     + json.dumps(j.model_dump().get('name', 'job ' + str(i))) + "\n")
-                (wf / f"imported-schedule-{i}.yaml").write_text(body, "utf-8")
+                from aim.adapters.common import write_nofollow
+                write_nofollow(wf / f"imported-schedule-{i}.yaml", body, mode=0o600)
             u = home / "unsupported"
             u.mkdir(parents=True, exist_ok=True)
-            (u / "jobs.json").write_text(json.dumps([j.model_dump() for j in state.jobs], indent=2), "utf-8")
+            from aim.adapters.common import write_nofollow as _wn
+            _wn(u / "jobs.json", json.dumps([j.model_dump() for j in state.jobs], indent=2), mode=0o600)
         gaps.append(GapItem(
             item="buzz-identity", policy="warn",
             detail="Nostr keypair (BUZZ_PRIVATE_KEY) is the agent's identity; vault-only, "

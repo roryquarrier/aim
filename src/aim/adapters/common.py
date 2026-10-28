@@ -37,6 +37,8 @@ def read_docs(home: Path, harness: str, persona_paths: list[str], memory_globs: 
             idx += 1
     for pattern in memory_globs:
         for p in sorted(home.glob(pattern)):
+            if p.is_symlink():
+                continue  # never follow symlinks out of the home (audit opus #8)
             rel = str(p.relative_to(home)).replace("\\", "/")
             docs.append(Document(
                 id=f"doc-{idx}", path=rel, scope=Scope.user,
@@ -55,9 +57,13 @@ def load_skills(home: Path, skills_dir: str, harness: str):
     if not base.is_dir():
         return skills
     for skill_md in sorted(base.glob("*/SKILL.md")):
+        if skill_md.is_symlink():
+            continue
         name = skill_md.parent.name
         scripts = {}
         for f in skill_md.parent.rglob("*"):
+            if f.is_symlink() or ".git" in f.parts:
+                continue
             if f.name == "SKILL.md" or not f.is_file():
                 continue
             # skip pycache, dotfiles, hidden dirs, big binaries, symlinks
@@ -74,6 +80,26 @@ def load_skills(home: Path, skills_dir: str, harness: str):
 _WIN_RESERVED = re.compile(
     r"(?:^|[\\/])(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", re.IGNORECASE
 )
+
+
+def is_safe_file(p: Path) -> bool:
+    """True if p is a regular file AND not itself a symlink (export readers use this)."""
+    try:
+        return p.is_file() and not p.is_symlink()
+    except OSError:
+        return False
+
+
+def write_nofollow(p: Path, data, mode: int | None = None) -> None:
+    """Write text/bytes, refusing to follow a symlink at the final component."""
+    if p.is_symlink():
+        p.unlink()  # replace the link rather than writing through it (outside the transaction)
+    if isinstance(data, str):
+        p.write_text(data, "utf-8")
+    else:
+        p.write_bytes(data)
+    if mode is not None:
+        p.chmod(mode)
 
 
 def _safe_relpath(home: Path, rel: str, what: str) -> Path:
@@ -103,7 +129,7 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
         if not dry_run:
             p = home / persona_rel
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(persona.content, "utf-8")
+            write_nofollow(p, persona.content, mode=0o600)
         gaps.append(GapItem(item=f"persona:{persona_rel}", policy="native"))
     for d in state.documents:
         if d.kind.value == "persona":
@@ -118,7 +144,7 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
         if not dry_run:
             p = _safe_relpath(home, rel, "document")
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(d.content, "utf-8")
+            write_nofollow(p, d.content, mode=0o600)
         gaps.append(GapItem(item=f"{d.kind.value}:{rel}", policy="native"))
     for s in state.skills:
         import re as _re2
@@ -129,7 +155,7 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
             raise ValueError(f"skill name escapes skills/: {s.name!r}")
         if not dry_run:
             sdir.mkdir(parents=True, exist_ok=True)
-            (sdir / "SKILL.md").write_text(s.skill_md, "utf-8")
+            write_nofollow(sdir / "SKILL.md", s.skill_md, mode=0o600)
             for rel, blob in s.scripts.items():
                 f = _safe_relpath(sdir, rel, "skill script")
                 f.parent.mkdir(parents=True, exist_ok=True)
@@ -143,7 +169,7 @@ def write_common_import(state: AgentState, home: Path, persona_rel: str, memory_
             u = home / "unsupported"
             u.mkdir(parents=True, exist_ok=True)
             import json
-            (u / "jobs.json").write_text(json.dumps([j.model_dump() for j in state.jobs], indent=2), "utf-8")
+            write_nofollow((u / "jobs.json"), json.dumps([j.model_dump() for j in state.jobs], indent=2), mode=0o600)
     return gaps
 
 
